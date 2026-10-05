@@ -58,6 +58,7 @@ export class LocalAppController {
       accessToken: auth.access_token!,
       refreshToken: auth.refresh_token!,
       expiresAt: Date.now() + Math.max(expiresIn, 0) * 1000,
+      oauthServer: 'oauth.bitrix.info',
     });
 
     await this.storage.saveBitrix24Installation({
