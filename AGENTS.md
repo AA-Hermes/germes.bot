@@ -1,44 +1,37 @@
-# Project
+# Germes Bot
 
-B2B SaaS application.
+Standalone backend integration service for Hermes.
 
 ## Stack
-
-- Next.js
-- TypeScript
-- PostgreSQL
-- Prisma
-- Tailwind
+- Node.js 22+
+- TypeScript strict mode
+- Fastify
+- native fetch
+- Vitest
+- Docker
 
 ## Architecture
+Bitrix24 is an adapter/channel, not the application core.
 
-See:
-- .docs/architecture.md
-- .docs/database.md
+HTTP -> Controller -> BotService / EventService -> Bitrix24RestClient
 
-## Development rules
+Runtime integration state must be accessed through IntegrationStorage so file storage can later be replaced by PostgreSQL, Redis, or SQLite.
 
-- TypeScript strict mode
-- Server Components by default
-- Client Components only when required
-- Zod for validation
-- Prisma for database access
-- No business logic inside React components
+## Rules
+- Keep HTTP, business logic, REST transport, and persistence separate.
+- Never commit or log secrets.
+- Do not call Bitrix24 REST directly from controllers.
+- Prefer small explicit abstractions over framework-heavy patterns.
+- Do not add frontend code unless explicitly requested.
+- Do not add LLM integrations yet; preserve a path for a future WorkflowService.
 
 ## Before completing a task
-
 Run:
-
-pnpm lint
-pnpm test
-pnpm build
-
-All commands must pass.
+npm run lint
+npm test
+npm run build
 
 ## Git
-
 One feature = one branch.
-
 Never commit directly to main.
-
 Create a Pull Request.

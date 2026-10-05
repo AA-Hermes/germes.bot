@@ -1,0 +1,29 @@
+import type { FastifyInstance } from 'fastify';
+import { config } from '../../config/index.js';
+import { FileIntegrationStorage } from '../../storage/file-integration-storage.js';
+import { BotController } from './controllers/bot.controller.js';
+import { BotService } from './services/bot.service.js';
+import { EventService } from './services/event.service.js';
+import { Bitrix24RestClient } from './services/rest-client.service.js';
+
+export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
+  const storage = new FileIntegrationStorage(config.storageFile);
+  const client = new Bitrix24RestClient(config.bitrix24.webhookUrl ?? '', app.log);
+  const botService = new BotService(
+    client,
+    storage,
+    app.log,
+    config.bitrix24.botToken,
+    `${config.appUrl}/api/bitrix24/webhook`,
+  );
+  const controller = new BotController(botService, new EventService());
+
+  app.post('/bot/register', controller.register);
+  app.get('/bot/status', controller.status);
+  app.post('/bot/test', controller.test);
+  app.post(
+    '/webhook',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    controller.webhook,
+  );
+}
