@@ -1,4 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
+import type { IntegrationStorage } from '../../../storage/integration-storage.js';
+import { Bitrix24OAuthService } from './oauth.service.js';
 
 interface BitrixResponse<T> {
   result?: T;
@@ -19,35 +21,71 @@ export class Bitrix24RestError extends Error {
 
 export class Bitrix24RestClient {
   constructor(
-    private readonly baseUrl: string,
+    private readonly storage: IntegrationStorage,
+    private readonly oauth: Bitrix24OAuthService,
     private readonly logger: FastifyBaseLogger,
     private readonly timeoutMs = 10_000,
   ) {}
 
   async call<T>(method: string, params: Record<string, unknown>): Promise<T> {
-    if (!this.baseUrl) throw new Bitrix24RestError('Bitrix24 webhook URL is not configured');
+    const tokens = await this.storage.getTokens();
+    const installation = await this.storage.getBitrix24Installation();
 
+    if (!tokens?.accessToken || !installation?.clientEndpoint) {
+      throw new Bitrix24RestError('Bitrix24 application is not installed');
+    }
+
+    try {
+      return await this.callWithToken<T>(
+        installation.clientEndpoint,
+        method,
+        params,
+        tokens.accessToken,
+      );
+    } catch (error) {
+      if (!(error instanceof Bitrix24RestError) || error.code !== 'expired_token') {
+        throw error;
+      }
+
+      const refreshed = await this.oauth.refreshTokens();
+
+      return this.callWithToken<T>(
+        installation.clientEndpoint,
+        method,
+        params,
+        refreshed.accessToken,
+      );
+    }
+  }
+
+  private async callWithToken<T>(
+    baseUrl: string,
+    method: string,
+    params: Record<string, unknown>,
+    accessToken: string,
+  ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const url = new URL(method, this.baseUrl.endsWith('/') ? this.baseUrl : this.baseUrl + '/');
+      const url = new URL(method, baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify(params),
+        body: JSON.stringify({ ...params, auth: accessToken }),
         signal: controller.signal,
       });
 
       const payload = (await response.json()) as BitrixResponse<T>;
 
-      if (!response.ok) {
-        this.logger.error({ event: 'BITRIX_API_REQUEST_ERROR', method, status: response.status });
-        throw new Bitrix24RestError('Bitrix24 HTTP error', payload.error, response.status);
-      }
+      if (!response.ok || payload.error) {
+        this.logger.error({
+          event: 'BITRIX_API_REQUEST_ERROR',
+          method,
+          status: response.status,
+          code: payload.error,
+        });
 
-      if (payload.error) {
-        this.logger.error({ event: 'BITRIX_API_REQUEST_ERROR', method, code: payload.error });
         throw new Bitrix24RestError(
           payload.error_description || 'Bitrix24 REST error',
           payload.error,
@@ -62,10 +100,14 @@ export class Bitrix24RestClient {
       return payload.result;
     } catch (error) {
       if (error instanceof Bitrix24RestError) throw error;
-      if ((error as Error).name === 'AbortError') {
+
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new Bitrix24RestError('Bitrix24 request timed out');
       }
-      throw new Bitrix24RestError((error as Error).message);
+
+      throw new Bitrix24RestError(
+        error instanceof Error ? error.message : 'Unknown Bitrix24 REST error',
+      );
     } finally {
       clearTimeout(timeout);
     }
