@@ -5,7 +5,7 @@ import qs from 'qs';
 import { bitrix24LocalAppRoutes } from './modules/bitrix24/local-app.routes.js';
 import { bitrix24Routes } from './modules/bitrix24/routes.js';
 
-export async function buildApp() {
+export async function createApp() {
   const app = Fastify({
     logger: true,
     bodyLimit: 256 * 1024,
@@ -23,13 +23,9 @@ export async function buildApp() {
   }));
 
   app.get('/health', async () => ({ status: 'ok' }));
+
   await app.register(bitrix24LocalAppRoutes, { prefix: '/b24' });
   await app.register(bitrix24Routes, { prefix: '/api/bitrix24' });
 
-  await app.ready();
   return app;
 }
-
-const app = await buildApp();
-
-export default app;
