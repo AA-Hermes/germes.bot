@@ -27,9 +27,25 @@ HTTP
 
 Bitrix24 is an adapter, not the application core.
 
-## Authorization
+## Bitrix24 local application
 
-For one Hermes-owned Bitrix24 Cloud portal, use an inbound webhook with the `imbot` scope. OAuth is deferred until multi-portal installation is required.
+Configure the local server application in Bitrix24 with:
+
+```text
+Initial installation path:
+https://germesbot.vercel.app/b24/install
+
+Your handler path:
+https://germesbot.vercel.app/b24/handler
+```
+
+Leave **Application completes the installation itself** disabled for the backend callback flow.
+
+Bitrix24 sends `ONAPPINSTALL` to `/b24/install`. The service stores the OAuth access token, refresh token, expiry, portal metadata, and application token through `IntegrationStorage`.
+
+The application handler page is available at `/b24/handler`.
+
+For the local application, configure `BITRIX24_CLIENT_ID` and `BITRIX24_CLIENT_SECRET` after Bitrix24 creates the application.
 
 ## Configuration
 
@@ -42,9 +58,10 @@ cp .env.example .env
 Configure:
 
 - `APP_URL`
-- `BITRIX24_WEBHOOK_URL`
-- `BITRIX24_BOT_TOKEN`
-- `BITRIX24_APPLICATION_TOKEN`
+- `BITRIX24_CLIENT_ID`
+- `BITRIX24_CLIENT_SECRET`
+
+Legacy inbound-webhook variables remain temporarily in `.env.example` while the bot REST client is migrated fully to OAuth.
 
 The registered bot callback is:
 
@@ -63,6 +80,10 @@ npm run dev
 
 ```text
 GET  /health
+GET  /b24/install
+POST /b24/install
+GET  /b24/handler
+POST /b24/handler
 POST /api/bitrix24/bot/register
 GET  /api/bitrix24/bot/status
 POST /api/bitrix24/bot/test
@@ -90,5 +111,5 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 - one Bitrix24 portal
 - local file storage
 - duplicate-event protection is in memory
-- no OAuth installation lifecycle yet
+- OAuth installation callback is implemented; automatic token refresh is the next step
 - no LLM/WorkflowService yet
