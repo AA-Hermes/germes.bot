@@ -18,14 +18,18 @@ const EMPTY_STATE: State = {
   bitrix24Installation: null,
 };
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error;
+}
+
 export class FileIntegrationStorage implements IntegrationStorage {
   constructor(private readonly filePath: string) {}
 
   private async readState(): Promise<State> {
     try {
       return JSON.parse(await readFile(this.filePath, 'utf8')) as State;
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') return { ...EMPTY_STATE };
+    } catch (error: unknown) {
+      if (isNodeError(error) && error.code === 'ENOENT') return { ...EMPTY_STATE };
       throw error;
     }
   }
