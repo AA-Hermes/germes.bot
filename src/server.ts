@@ -27,13 +27,12 @@ app.get('/health', async () => ({ status: 'ok' }));
 await app.register(bitrix24LocalAppRoutes, { prefix: '/b24' });
 await app.register(bitrix24Routes, { prefix: '/api/bitrix24' });
 
-export default app;
-
-if (!process.env.VERCEL) {
-  try {
-    await app.listen({ port: config.port, host: '0.0.0.0' });
-  } catch (error) {
-    app.log.error(error);
-    process.exit(1);
-  }
+try {
+  await app.listen({
+    port: Number(process.env.PORT ?? config.port),
+    host: '0.0.0.0',
+  });
+} catch (error) {
+  app.log.error(error);
+  process.exit(1);
 }
