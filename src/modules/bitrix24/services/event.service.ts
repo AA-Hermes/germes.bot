@@ -1,5 +1,11 @@
 import type { ParsedBitrixEvent } from '../types/events.js';
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
 function numberValue(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error('Invalid numeric field in Bitrix24 event');
@@ -12,13 +18,15 @@ function stringValue(value: unknown): string {
 }
 
 export class EventService {
-  parse(payload: any): ParsedBitrixEvent {
-    if (!payload || payload.event !== 'ONIMBOTV2MESSAGEADD') return null;
+  parse(payload: unknown): ParsedBitrixEvent {
+    if (!isRecord(payload) || payload.event !== 'ONIMBOTV2MESSAGEADD') return null;
 
     const data = payload.data;
-    if (!data?.bot || !data?.message || !data?.chat) {
+    if (!isRecord(data) || !isRecord(data.bot) || !isRecord(data.message) || !isRecord(data.chat)) {
       throw new Error('Malformed ONIMBOTV2MESSAGEADD payload');
     }
+
+    const auth = isRecord(payload.auth) ? payload.auth : {};
 
     return {
       event: 'ONIMBOTV2MESSAGEADD',
@@ -30,8 +38,8 @@ export class EventService {
       dialogId: stringValue(data.chat.dialogId),
       chatType: stringValue(data.chat.type),
       applicationToken:
-        typeof payload.auth?.application_token === 'string' ? payload.auth.application_token : null,
-      domain: typeof payload.auth?.domain === 'string' ? payload.auth.domain : null,
+        typeof auth.application_token === 'string' ? auth.application_token : null,
+      domain: typeof auth.domain === 'string' ? auth.domain : null,
     };
   }
 }
