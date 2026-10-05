@@ -1,13 +1,22 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { AuthTokens, IntegrationStorage } from './integration-storage.js';
+import type {
+  AuthTokens,
+  Bitrix24Installation,
+  IntegrationStorage,
+} from './integration-storage.js';
 
 interface State {
   botId: number | null;
   tokens: AuthTokens | null;
+  bitrix24Installation: Bitrix24Installation | null;
 }
 
-const EMPTY_STATE: State = { botId: null, tokens: null };
+const EMPTY_STATE: State = {
+  botId: null,
+  tokens: null,
+  bitrix24Installation: null,
+};
 
 export class FileIntegrationStorage implements IntegrationStorage {
   constructor(private readonly filePath: string) {}
@@ -42,5 +51,16 @@ export class FileIntegrationStorage implements IntegrationStorage {
   async saveTokens(tokens: AuthTokens | null): Promise<void> {
     const state = await this.readState();
     await this.writeState({ ...state, tokens });
+  }
+
+  async getBitrix24Installation(): Promise<Bitrix24Installation | null> {
+    return (await this.readState()).bitrix24Installation;
+  }
+
+  async saveBitrix24Installation(
+    installation: Bitrix24Installation | null,
+  ): Promise<void> {
+    const state = await this.readState();
+    await this.writeState({ ...state, bitrix24Installation: installation });
   }
 }
