@@ -16,20 +16,13 @@ export class BotService {
     private readonly client: Bitrix24RestClient,
     private readonly storage: IntegrationStorage,
     private readonly logger: FastifyBaseLogger,
-    private readonly botToken: string | null,
     private readonly webhookUrl: string,
   ) {}
-
-  private requireBotToken(): string {
-    if (!this.botToken) throw new Error('BITRIX24_BOT_TOKEN is not configured');
-    return this.botToken;
-  }
 
   async register(): Promise<BotRegistration> {
     const result = await this.client.call<BotRegisterResult>('imbot.v2.Bot.register', {
       fields: {
         code: BOT_CODE,
-        botToken: this.requireBotToken(),
         type: 'bot',
         eventMode: 'webhook',
         webhookUrl: this.webhookUrl,
@@ -46,10 +39,7 @@ export class BotService {
   }
 
   async isRegistered(): Promise<boolean> {
-    if (!this.botToken) return false;
-
     const result = await this.client.call<BotListResult>('imbot.v2.Bot.list', {
-      botToken: this.botToken,
       filter: { type: 'bot' },
       limit: 100,
     });
@@ -74,7 +64,6 @@ export class BotService {
 
     const result = await this.client.call<SendMessageResult>('imbot.v2.Chat.Message.send', {
       botId,
-      botToken: this.requireBotToken(),
       dialogId: String(dialogId),
       fields: { message },
     });
@@ -93,11 +82,7 @@ export class BotService {
     const botId = await this.storage.getBotId();
     if (!botId) return;
 
-    await this.client.call('imbot.v2.Bot.unregister', {
-      botId,
-      botToken: this.requireBotToken(),
-    });
-
+    await this.client.call('imbot.v2.Bot.unregister', { botId });
     await this.storage.setBotId(null);
   }
 }
