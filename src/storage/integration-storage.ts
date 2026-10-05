@@ -2,6 +2,7 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   expiresAt?: number;
+  oauthServer?: string;
 }
 
 export interface Bitrix24Installation {
