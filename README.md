@@ -4,12 +4,12 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 
 ## MVP
 - Node.js 22 + TypeScript + Fastify
-- Bitrix24 Chatbots 2.0 (imbot.v2)
-- inbound webhook authorization for one owned Bitrix24 Cloud portal
-- Hermes AI registration
+- Bitrix24 Chatbots 2.0 (`imbot.v2`)
+- Bitrix24 local application OAuth
+- Hermes AI bot registration
 - incoming message webhook
 - echo reply: `Получил: {message}`
-- file-backed runtime integration state
+- OAuth token refresh on `expired_token`
 - structured logging
 - health endpoint
 - Docker
@@ -19,9 +19,10 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 
 ```text
 HTTP
-  -> BotController
+  -> Controller
     -> BotService / EventService
       -> Bitrix24RestClient
+        -> Bitrix24OAuthService
       -> IntegrationStorage
 ```
 
@@ -39,13 +40,21 @@ Your handler path:
 https://germesbot.vercel.app/b24/handler
 ```
 
+Required application scope:
+
+```text
+imbot
+```
+
 Leave **Application completes the installation itself** disabled for the backend callback flow.
 
-Bitrix24 sends `ONAPPINSTALL` to `/b24/install`. The service stores the OAuth access token, refresh token, expiry, portal metadata, and application token through `IntegrationStorage`.
+Bitrix24 sends `ONAPPINSTALL` to `/b24/install`. The service stores the OAuth access token, refresh token, expiry, portal metadata, and `application_token` through `IntegrationStorage`.
 
-The application handler page is available at `/b24/handler`.
-
-For the local application, configure `BITRIX24_CLIENT_ID` and `BITRIX24_CLIENT_SECRET` after Bitrix24 creates the application.
+For OAuth calls:
+- `access_token` is sent as the REST `auth` parameter;
+- `botToken` is not used;
+- when Bitrix24 returns `expired_token`, the service refreshes the token pair and retries the original call once;
+- refreshed tokens replace the previous token pair in storage.
 
 ## Configuration
 
@@ -57,11 +66,11 @@ cp .env.example .env
 
 Configure:
 
-- `APP_URL`
-- `BITRIX24_CLIENT_ID`
-- `BITRIX24_CLIENT_SECRET`
-
-Legacy inbound-webhook variables remain temporarily in `.env.example` while the bot REST client is migrated fully to OAuth.
+```text
+APP_URL=https://germesbot.vercel.app
+BITRIX24_CLIENT_ID=...
+BITRIX24_CLIENT_SECRET=...
+```
 
 The registered bot callback is:
 
@@ -84,6 +93,7 @@ GET  /b24/install
 POST /b24/install
 GET  /b24/handler
 POST /b24/handler
+
 POST /api/bitrix24/bot/register
 GET  /api/bitrix24/bot/status
 POST /api/bitrix24/bot/test
@@ -99,17 +109,20 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 
 ## End-to-end
 
-1. Start the service on a public HTTPS URL.
+1. Deploy the service to a public HTTPS URL.
 2. `GET /health` returns `{"status":"ok"}`.
-3. Call `POST /api/bitrix24/bot/register`.
-4. Find **Hermes AI** in Bitrix24 Messenger.
-5. Send `Привет`.
-6. Bitrix24 calls `POST /api/bitrix24/webhook`.
-7. Hermes AI replies `Получил: Привет`.
+3. Install the local Bitrix24 application.
+4. The installation callback saves OAuth authorization data.
+5. Call `POST /api/bitrix24/bot/register`.
+6. Find **Hermes AI** in Bitrix24 Messenger.
+7. Send `Привет`.
+8. Bitrix24 calls `POST /api/bitrix24/webhook`.
+9. Hermes AI replies `Получил: Привет`.
 
 ## MVP limitations
-- one Bitrix24 portal
-- local file storage
-- duplicate-event protection is in memory
-- OAuth installation callback is implemented; automatic token refresh is the next step
-- no LLM/WorkflowService yet
+
+- one Bitrix24 portal;
+- `FileIntegrationStorage` is suitable for local development only;
+- Vercel serverless filesystem is not durable, so production installation/tokens must move to persistent storage before relying on the integration;
+- duplicate-event protection is in memory;
+- no LLM / WorkflowService yet.
