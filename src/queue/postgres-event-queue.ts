@@ -73,7 +73,8 @@ export class PostgresEventQueue implements EventQueue {
       RETURNING id
     `;
 
-    return result.length > 0;
+    const rows = result as unknown as Array<{ id: number | string }>;
+    return rows.length > 0;
   }
 
   async claim(limit: number): Promise<QueuedEvent[]> {
