@@ -1,3 +1,4 @@
+import { LLMProviderError, type LLMProviderErrorKind } from './llm-provider-error.js';
 import type {
   LLMGenerateInput,
   LLMGenerateResult,
@@ -45,6 +46,34 @@ type ReasoningEffort =
 function safeErrorCode(code: string | undefined): string {
   if (!code) return 'unknown';
   return /^[a-zA-Z0-9_.-]+$/.test(code) ? code : 'unknown';
+}
+
+function mapErrorKind(status: number, code: string): LLMProviderErrorKind {
+  if (code === 'credit_balance_exhausted' || code === 'insufficient_quota') {
+    return 'quota_exhausted';
+  }
+
+  if (status === 401 || code === 'invalid_api_key') {
+    return 'authentication_failed';
+  }
+
+  if (status === 429) {
+    return 'rate_limited';
+  }
+
+  return 'provider_error';
+}
+
+function createProviderError(status: number, code?: string): LLMProviderError {
+  const safeCode = safeErrorCode(code);
+
+  return new LLMProviderError(
+    `OpenAI Responses API error (HTTP ${status}, code ${safeCode})`,
+    mapErrorKind(status, safeCode),
+    'openai',
+    status,
+    safeCode,
+  );
 }
 
 export class OpenAIProvider implements LLMProvider {
@@ -97,18 +126,14 @@ export class OpenAIProvider implements LLMProvider {
         payload = (await response.json()) as OpenAIResponsePayload;
       } catch {
         if (!response.ok) {
-          throw new Error(
-            `OpenAI Responses API error (HTTP ${response.status}, code unknown)`,
-          );
+          throw createProviderError(response.status);
         }
 
         throw new Error('OpenAI Responses API returned invalid JSON');
       }
 
       if (!response.ok || payload.error) {
-        throw new Error(
-          `OpenAI Responses API error (HTTP ${response.status}, code ${safeErrorCode(payload.error?.code)})`,
-        );
+        throw createProviderError(response.status, payload.error?.code);
       }
 
       if (payload.status === 'incomplete') {
@@ -131,7 +156,11 @@ export class OpenAIProvider implements LLMProvider {
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('OpenAI Responses API request timed out');
+        throw new LLMProviderError(
+          'OpenAI Responses API request timed out',
+          'timeout',
+          'openai',
+        );
       }
 
       throw error;
