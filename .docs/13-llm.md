@@ -38,6 +38,7 @@ OPENAI_API_KEY
 OPENAI_MODEL
 OPENAI_TIMEOUT_MS
 OPENAI_MAX_OUTPUT_TOKENS
+OPENAI_REASONING_EFFORT
 ```
 
 Default model:
@@ -49,11 +50,13 @@ gpt-6-luna
 Default response settings:
 
 ```text
-reasoning.effort = low
 OPENAI_MAX_OUTPUT_TOKENS = 1200
+OPENAI_REASONING_EFFORT = optional
 ```
 
 `OPENAI_MAX_OUTPUT_TOKENS` must be at least 16.
+
+`OPENAI_REASONING_EFFORT` is only sent when configured. For the default `gpt-6-luna`, the provider factory applies `low` automatically; switching to another model does not inherit that reasoning parameter unless explicitly configured.
 
 The model is configuration, not application architecture. Do not hard-code model behavior into Bitrix24 adapters or WorkflowService.
 
@@ -78,7 +81,7 @@ When the raw REST payload contains multiple `output_text` parts, the provider co
 - records latency;
 - returns a safe fallback reply.
 
-Never log API keys or Authorization headers.
+Never log API keys, Authorization headers, or raw provider error messages. OpenAI error responses are converted to a safe local error containing only HTTP status and a sanitized error code.
 
 ## Token usage
 
