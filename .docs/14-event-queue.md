@@ -40,7 +40,7 @@ The unique key `(channel, external_id)` provides persistent duplicate-event prot
 
 ## Claiming and concurrency
 
-Workers claim rows atomically with `FOR UPDATE SKIP LOCKED`.
+Workers claim rows atomically with `FOR UPDATE SKIP LOCKED`. The processor claims one row at a time so each item receives a fresh processing lease immediately before its work starts.
 
 A claimed row moves to `processing` and increments `attempts`. Processing leases older than five minutes can be reclaimed.
 
@@ -71,4 +71,4 @@ When `DATABASE_URL` is not configured, local development keeps the previous sync
 
 Each accepted webhook schedules a background processor immediately. Pending or stale events are also eligible to be claimed by later webhook-triggered processors.
 
-A dedicated scheduled recovery trigger is intentionally not part of this PR; the durable Postgres row makes that a separate operational improvement without changing the webhook contract.
+Vercel Cron calls `GET /api/queue/process` once per minute. The route requires `Authorization: Bearer <CRON_SECRET>` and processes up to 10 available items. This independently recovers delayed retries and stale leases even when no new Bitrix24 webhook arrives.
