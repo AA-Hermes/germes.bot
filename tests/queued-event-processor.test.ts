@@ -51,7 +51,7 @@ describe('QueuedEventProcessor', () => {
 
     await processor.processAvailable();
 
-    expect(queue.claim).toHaveBeenCalledWith(5);
+    expect(queue.claim).toHaveBeenCalledWith(1);
     expect(workflowService.handleMessage).toHaveBeenCalledWith({
       channel: 'bitrix24',
       conversationId: '1',
