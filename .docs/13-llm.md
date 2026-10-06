@@ -79,9 +79,10 @@ When the raw REST payload contains multiple `output_text` parts, the provider co
 `WorkflowService`:
 - logs the provider failure;
 - records latency;
-- returns a safe fallback reply.
+- returns a safe fallback reply;
+- maps typed provider failures to safe user-facing explanations for quota exhaustion, authentication failures, rate limits, and timeouts.
 
-Never log API keys, Authorization headers, or raw provider error messages. OpenAI error responses are converted to a safe local error containing only HTTP status and a sanitized error code. Non-JSON error bodies are never propagated into local error messages.
+Never log API keys, Authorization headers, or raw provider error messages. OpenAI error responses are converted to a typed safe local error containing only provider metadata, HTTP status, and a sanitized error code. Non-JSON error bodies are never propagated into local error messages. User-facing replies must describe the failure category without exposing raw provider response bodies or credentials.
 
 ## Token usage
 
