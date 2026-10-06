@@ -28,6 +28,11 @@ export class QueuedEventProcessor {
           text: event.text,
         });
 
+        const preparedMessage = await this.botService.prepareMessage(
+          event.conversationId,
+          workflow.text,
+        );
+
         deliveryStarted = await this.queue.beginDelivery(event.id);
 
         if (!deliveryStarted) {
@@ -40,7 +45,7 @@ export class QueuedEventProcessor {
           continue;
         }
 
-        const sent = await this.botService.sendMessage(event.conversationId, workflow.text);
+        const sent = await this.botService.sendPreparedMessage(preparedMessage);
         await this.queue.markDelivered(event.id, sent.id);
 
         this.logger.info({

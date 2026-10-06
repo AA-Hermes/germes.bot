@@ -28,6 +28,14 @@ POST /api/bitrix24/bot/test
 POST /api/bitrix24/webhook
 ```
 
+## Queue worker
+
+```text
+GET /api/queue/process
+```
+
+The endpoint is used by the scheduled recovery workflow to process pending retries and stale queue leases. It requires `Authorization: Bearer <CRON_SECRET>` and is not intended for public clients.
+
 ## Rules
 
 - Keep endpoint behavior backward compatible unless a breaking change is explicitly requested.

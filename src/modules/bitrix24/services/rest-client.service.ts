@@ -27,7 +27,7 @@ export class Bitrix24RestClient {
     private readonly timeoutMs = 10_000,
   ) {}
 
-  async call<T>(method: string, params: Record<string, unknown>): Promise<T> {
+  async prepareCall(): Promise<{ clientEndpoint: string; accessToken: string }> {
     const tokens = await this.storage.getTokens();
     const installation = await this.storage.getBitrix24Installation();
 
@@ -35,12 +35,23 @@ export class Bitrix24RestClient {
       throw new Bitrix24RestError('Bitrix24 application is not installed');
     }
 
+    return {
+      clientEndpoint: installation.clientEndpoint,
+      accessToken: tokens.accessToken,
+    };
+  }
+
+  async callPrepared<T>(
+    prepared: { clientEndpoint: string; accessToken: string },
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<T> {
     try {
       return await this.callWithToken<T>(
-        installation.clientEndpoint,
+        prepared.clientEndpoint,
         method,
         params,
-        tokens.accessToken,
+        prepared.accessToken,
       );
     } catch (error) {
       if (!(error instanceof Bitrix24RestError) || error.code !== 'expired_token') {
@@ -50,12 +61,17 @@ export class Bitrix24RestClient {
       const refreshed = await this.oauth.refreshTokens();
 
       return this.callWithToken<T>(
-        installation.clientEndpoint,
+        prepared.clientEndpoint,
         method,
         params,
         refreshed.accessToken,
       );
     }
+  }
+
+  async call<T>(method: string, params: Record<string, unknown>): Promise<T> {
+    const prepared = await this.prepareCall();
+    return this.callPrepared<T>(prepared, method, params);
   }
 
   private async callWithToken<T>(
