@@ -38,6 +38,8 @@ Do not commit secrets.
 
 Use `.env.example` to document required variables without real values.
 
+For local development, leave `OPENAI_API_KEY` empty to use `EchoLLMProvider`. Set it only when testing the real OpenAI integration.
+
 ## Change discipline
 
 Prefer small, focused changes.
