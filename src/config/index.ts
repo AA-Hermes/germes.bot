@@ -13,6 +13,7 @@ const schema = z.object({
   OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
   OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(16).default(1_200),
   OPENAI_REASONING_EFFORT: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional().or(z.literal('')),
+  CRON_SECRET: z.string().optional().or(z.literal('')),
 });
 
 const env = schema.parse(process.env);
@@ -26,6 +27,7 @@ export const config = {
   },
   databaseUrl: env.DATABASE_URL || null,
   storageFile: env.INTEGRATION_STORAGE_FILE,
+  cronSecret: env.CRON_SECRET || null,
   openai: {
     apiKey: env.OPENAI_API_KEY || null,
     model: env.OPENAI_MODEL,

@@ -5,6 +5,7 @@ import qs from 'qs';
 import { config } from './config/index.js';
 import { bitrix24LocalAppRoutes } from './modules/bitrix24/local-app.routes.js';
 import { bitrix24Routes } from './modules/bitrix24/routes.js';
+import { queueWorkerRoutes } from './modules/queue-worker.routes.js';
 
 const app = Fastify({
   logger: true,
@@ -26,6 +27,7 @@ app.get('/health', async () => ({ status: 'ok' }));
 
 await app.register(bitrix24LocalAppRoutes, { prefix: '/b24' });
 await app.register(bitrix24Routes, { prefix: '/api/bitrix24' });
+await app.register(queueWorkerRoutes, { prefix: '/api' });
 
 try {
   await app.listen({
