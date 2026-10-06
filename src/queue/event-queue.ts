@@ -14,6 +14,8 @@ export interface QueuedEvent extends QueuedEventInput {
 export interface EventQueue {
   enqueue(event: QueuedEventInput): Promise<boolean>;
   claim(limit: number): Promise<QueuedEvent[]>;
-  complete(id: number): Promise<void>;
+  beginDelivery(id: number): Promise<boolean>;
+  markDelivered(id: number, outboundMessageId: number): Promise<void>;
+  failDelivery(id: number, errorName: string): Promise<void>;
   retry(id: number, attempts: number, errorName: string): Promise<void>;
 }
