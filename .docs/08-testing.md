@@ -24,7 +24,9 @@ Add or update tests when changing:
 - webhook event normalization;
 - duplicate/self-message handling;
 - storage behavior;
-- public API behavior.
+- public API behavior;
+- WorkflowService provider delegation;
+- provider failure fallback behavior.
 
 Prefer deterministic unit tests for integration logic.
 
