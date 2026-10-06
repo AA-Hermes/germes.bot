@@ -58,6 +58,10 @@ Current policy:
 
 Only a safe error class name is stored in `last_error`; raw provider response bodies are not persisted.
 
+Before sending a reply to Bitrix24, the queue atomically changes `delivery_status` from `pending` to `sending`. After Bitrix24 returns a message ID, the same row is marked `completed` / `sent` and stores that outbound message ID. If the process fails after delivery has started, the row is not automatically resent because Bitrix24 Chatbots 2.0 does not expose an idempotency key for `imbot.v2.Chat.Message.send`. The row is instead marked `failed` / `unknown` for manual inspection. This favors avoiding duplicate user-visible replies over automatic retry of an ambiguous send.
+
+Stale rows that have already reached the maximum attempt count are finalized as `failed`. Stale rows left in `sending` are finalized as `failed` / `unknown` instead of being reclaimed for another send.
+
 ## Vercel lifecycle
 
 Vercel production uses `waitUntil()` from `@vercel/functions` so the HTTP webhook response is not blocked by OpenAI latency while background processing remains attached to the Function lifecycle.
@@ -71,4 +75,4 @@ When `DATABASE_URL` is not configured, local development keeps the previous sync
 
 Each accepted webhook schedules a background processor immediately. Pending or stale events are also eligible to be claimed by later webhook-triggered processors.
 
-Vercel Cron calls `GET /api/queue/process` once per minute. The route requires `Authorization: Bearer <CRON_SECRET>` and processes up to 10 available items. This independently recovers delayed retries and stale leases even when no new Bitrix24 webhook arrives.
+`.github/workflows/queue-worker.yml` calls `GET /api/queue/process` every five minutes. The route requires `Authorization: Bearer <CRON_SECRET>` and processes up to 10 available items. Configure the same `CRON_SECRET` value both in Vercel environment variables and in GitHub Actions repository secrets. This independently recovers delayed retries and stale leases even when no new Bitrix24 webhook arrives.
