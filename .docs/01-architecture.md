@@ -10,12 +10,15 @@ Bitrix24 is an adapter/channel, not the application core.
 
 Keep HTTP, business logic, transport, and persistence separated.
 
-Current message flow:
+Current production message flow:
 
 ```text
 Bitrix24 webhook
   -> BotController
     -> EventService
+    -> PostgresEventQueue
+  -> HTTP 200
+  -> QueuedEventProcessor
     -> WorkflowService
       -> LLMProvider
     -> BotService
@@ -23,6 +26,8 @@ Bitrix24 webhook
         -> Bitrix24OAuthService
       -> IntegrationStorage
 ```
+
+A scheduled queue worker also invokes `QueuedEventProcessor` to recover retries and stale leases that are not picked up by the immediate webhook-triggered background task.
 
 ## Main modules
 
@@ -45,6 +50,8 @@ Controllers must not call Bitrix24 REST directly.
 ### Persistence
 
 All integration runtime state must be accessed through `IntegrationStorage`.
+
+Incoming production messages are persisted separately through `EventQueue`. `PostgresEventQueue` provides durable enqueueing, duplicate protection, retry state, and worker leases.
 
 Current implementations:
 - `PostgresIntegrationStorage` for production;
