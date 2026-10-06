@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LLMProviderError } from '../src/core/llm/llm-provider-error.js';
 import { OpenAIProvider } from '../src/core/llm/openai.provider.js';
 
 afterEach(() => {
@@ -220,6 +221,44 @@ describe('OpenAIProvider', () => {
         conversationId: 'chat5',
       }),
     ).rejects.toThrow('OpenAI Responses API error (HTTP 502, code unknown)');
+  });
+
+  it('classifies exhausted API balance as a quota error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'credit_balance_exhausted',
+              message: 'You have no credits left',
+            },
+          }),
+          {
+            status: 429,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
+      ),
+    );
+
+    const provider = new OpenAIProvider('test-key', 'gpt-6-luna', 5_000, 1_200);
+
+    try {
+      await provider.generateReply({
+        message: 'Привет',
+        conversationId: 'chat5',
+      });
+      throw new Error('Expected provider to fail');
+    } catch (error) {
+      expect(error).toBeInstanceOf(LLMProviderError);
+      expect(error).toMatchObject({
+        kind: 'quota_exhausted',
+        provider: 'openai',
+        status: 429,
+        code: 'credit_balance_exhausted',
+      });
+    }
   });
 
   it('does not propagate provider error messages that may contain credential-derived data', async () => {
