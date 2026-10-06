@@ -39,7 +39,7 @@ describe('OpenAIProvider', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const provider = new OpenAIProvider('test-key', 'gpt-6-luna', 5_000, 1_200);
+    const provider = new OpenAIProvider('test-key', 'gpt-6-luna', 5_000, 1_200, 'low');
 
     await expect(
       provider.generateReply({
@@ -183,7 +183,25 @@ describe('OpenAIProvider', () => {
     });
   });
 
-  it('throws without exposing the API key when OpenAI returns an error', async () => {
+  it('omits reasoning options when they are not configured', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ status: 'completed', output_text: 'OK' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OpenAIProvider('test-key', 'gpt-4.1', 5_000, 1_200);
+
+    await provider.generateReply({ message: 'Привет', conversationId: 'chat5' });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.reasoning).toBeUndefined();
+  });
+
+  it('does not propagate provider error messages that may contain credential-derived data', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -191,7 +209,7 @@ describe('OpenAIProvider', () => {
           JSON.stringify({
             error: {
               code: 'invalid_request_error',
-              message: 'Invalid request',
+              message: 'Incorrect API key provided: sk-proj-...ABCD',
             },
           }),
           {
@@ -209,6 +227,6 @@ describe('OpenAIProvider', () => {
         message: 'Привет',
         conversationId: 'chat5',
       }),
-    ).rejects.toThrow('Invalid request');
+    ).rejects.toThrow('OpenAI Responses API error (HTTP 400, code invalid_request_error)');
   });
 });
