@@ -6,28 +6,39 @@ import { QueuedEventProcessor } from '../src/modules/bitrix24/services/queued-ev
 function createLogger(): FastifyBaseLogger {
   return {
     info: vi.fn(),
+    warn: vi.fn(),
     error: vi.fn(),
   } as unknown as FastifyBaseLogger;
 }
 
+function createQueue(event: {
+  id: number;
+  externalId: string;
+  attempts: number;
+}): EventQueue {
+  return {
+    enqueue: vi.fn(),
+    claim: vi.fn(async () => [
+      {
+        id: event.id,
+        channel: 'bitrix24',
+        externalId: event.externalId,
+        conversationId: '1',
+        userId: '1',
+        text: 'Привет',
+        attempts: event.attempts,
+      },
+    ]),
+    beginDelivery: vi.fn(async () => true),
+    markDelivered: vi.fn(async () => undefined),
+    failDelivery: vi.fn(async () => undefined),
+    retry: vi.fn(async () => undefined),
+  };
+}
+
 describe('QueuedEventProcessor', () => {
-  it('processes claimed events and marks them completed', async () => {
-    const queue: EventQueue = {
-      enqueue: vi.fn(),
-      claim: vi.fn(async () => [
-        {
-          id: 42,
-          channel: 'bitrix24',
-          externalId: '670324',
-          conversationId: '1',
-          userId: '1',
-          text: 'Привет',
-          attempts: 1,
-        },
-      ]),
-      complete: vi.fn(async () => undefined),
-      retry: vi.fn(async () => undefined),
-    };
+  it('marks a successfully sent message as delivered', async () => {
+    const queue = createQueue({ id: 42, externalId: '670324', attempts: 1 });
 
     const workflowService = {
       handleMessage: vi.fn(async () => ({
@@ -38,48 +49,56 @@ describe('QueuedEventProcessor', () => {
     };
 
     const botService = {
-      sendMessage: vi.fn(async () => ({ result: true })),
+      sendMessage: vi.fn(async () => ({ id: 670326 })),
     };
 
-    const logger = createLogger();
     const processor = new QueuedEventProcessor(
       queue,
       workflowService as never,
       botService as never,
-      logger,
+      createLogger(),
     );
 
-    await processor.processAvailable();
+    await processor.processAvailable(1);
 
     expect(queue.claim).toHaveBeenCalledWith(1);
-    expect(workflowService.handleMessage).toHaveBeenCalledWith({
-      channel: 'bitrix24',
-      conversationId: '1',
-      userId: '1',
-      text: 'Привет',
-    });
+    expect(queue.beginDelivery).toHaveBeenCalledWith(42);
     expect(botService.sendMessage).toHaveBeenCalledWith('1', 'OPENAI');
-    expect(queue.complete).toHaveBeenCalledWith(42);
+    expect(queue.markDelivered).toHaveBeenCalledWith(42, 670326);
+    expect(queue.failDelivery).not.toHaveBeenCalled();
     expect(queue.retry).not.toHaveBeenCalled();
   });
 
-  it('returns failed work to the queue for retry', async () => {
-    const queue: EventQueue = {
-      enqueue: vi.fn(),
-      claim: vi.fn(async () => [
-        {
-          id: 43,
-          channel: 'bitrix24',
-          externalId: '670325',
-          conversationId: '1',
-          userId: '1',
-          text: 'Привет',
-          attempts: 2,
-        },
-      ]),
-      complete: vi.fn(async () => undefined),
-      retry: vi.fn(async () => undefined),
+  it('retries failures that happen before outbound delivery starts', async () => {
+    const queue = createQueue({ id: 43, externalId: '670325', attempts: 2 });
+
+    const workflowService = {
+      handleMessage: vi.fn(async () => {
+        throw new Error('Workflow unavailable');
+      }),
     };
+
+    const botService = {
+      sendMessage: vi.fn(),
+    };
+
+    const processor = new QueuedEventProcessor(
+      queue,
+      workflowService as never,
+      botService as never,
+      createLogger(),
+    );
+
+    await processor.processAvailable(1);
+
+    expect(queue.beginDelivery).not.toHaveBeenCalled();
+    expect(botService.sendMessage).not.toHaveBeenCalled();
+    expect(queue.retry).toHaveBeenCalledWith(43, 2, 'Error');
+    expect(queue.failDelivery).not.toHaveBeenCalled();
+  });
+
+  it('does not automatically resend after an outbound delivery attempt fails', async () => {
+    const queue = createQueue({ id: 44, externalId: '670326', attempts: 3 });
 
     const workflowService = {
       handleMessage: vi.fn(async () => ({
@@ -94,17 +113,18 @@ describe('QueuedEventProcessor', () => {
       }),
     };
 
-    const logger = createLogger();
     const processor = new QueuedEventProcessor(
       queue,
       workflowService as never,
       botService as never,
-      logger,
+      createLogger(),
     );
 
-    await processor.processAvailable();
+    await processor.processAvailable(1);
 
-    expect(queue.complete).not.toHaveBeenCalled();
-    expect(queue.retry).toHaveBeenCalledWith(43, 2, 'Error');
+    expect(queue.beginDelivery).toHaveBeenCalledWith(44);
+    expect(queue.failDelivery).toHaveBeenCalledWith(44, 'Error');
+    expect(queue.retry).not.toHaveBeenCalled();
+    expect(queue.markDelivered).not.toHaveBeenCalled();
   });
 });
