@@ -8,6 +8,8 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 - Bitrix24 local application OAuth
 - Hermes AI bot registration
 - incoming message webhook
+- Postgres-backed incoming event queue in production
+- non-blocking Vercel background processing with `waitUntil()`
 - channel-independent `WorkflowService`
 - configurable `LLMProvider`
 - OpenAI Responses API provider
@@ -24,13 +26,16 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 Bitrix24 webhook
   -> BotController
     -> EventService
-    -> WorkflowService
-      -> LLMProvider
-        -> OpenAIProvider / EchoLLMProvider
-    -> BotService
-      -> Bitrix24RestClient
-        -> Bitrix24OAuthService
-      -> IntegrationStorage
+    -> PostgresEventQueue
+    -> HTTP 200
+    -> background QueuedEventProcessor
+      -> WorkflowService
+        -> LLMProvider
+          -> OpenAIProvider / EchoLLMProvider
+      -> BotService
+        -> Bitrix24RestClient
+          -> Bitrix24OAuthService
+        -> IntegrationStorage
 ```
 
 Bitrix24 is an adapter, not the application core.
@@ -75,7 +80,9 @@ DATABASE_URL set   -> PostgresIntegrationStorage
 DATABASE_URL empty -> FileIntegrationStorage
 ```
 
-`PostgresIntegrationStorage` creates the `integration_state` table automatically on first access and stores the Bitrix24 bot ID, OAuth token pair, and installation metadata. No manual SQL migration is required for the MVP.
+`PostgresIntegrationStorage` creates the `integration_state` table automatically on first access and stores the Bitrix24 bot ID, OAuth token pair, and installation metadata.
+
+When `DATABASE_URL` is configured, `PostgresEventQueue` also creates `incoming_event_queue`. Incoming Bitrix24 messages are persisted before the webhook returns, deduplicated by `(channel, external_id)`, and processed in a Vercel background task. No manual SQL migration is required for the MVP.
 
 `FileIntegrationStorage` remains available for local development only. Do not rely on it in Vercel production because the serverless filesystem is ephemeral.
 
@@ -151,13 +158,16 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 6. Find **Hermes AI** in Bitrix24 Messenger.
 7. Send `Привет`.
 8. Bitrix24 calls `POST /api/bitrix24/webhook`.
-9. `WorkflowService` sends the message to the configured LLM provider.
-10. Hermes AI replies with the provider response. Without `OPENAI_API_KEY`, the echo fallback replies `Получил: Привет`.
+9. The validated message is persisted in Postgres and the webhook immediately acknowledges it.
+10. A Vercel background task claims the queued event and calls `WorkflowService`.
+11. `WorkflowService` sends the message to the configured LLM provider.
+12. Hermes AI replies with the provider response. Without `OPENAI_API_KEY`, the echo fallback replies `Получил: Привет`.
 
 ## MVP limitations
 
 - one Bitrix24 portal;
 - production storage is Postgres when `DATABASE_URL` is configured;
 - file storage remains a local-development fallback;
-- duplicate-event protection is in memory;
+- persistent duplicate-event protection is provided by the Postgres event queue in production;
+- local development without `DATABASE_URL` keeps in-memory duplicate protection and synchronous processing;
 - no persistent conversation history yet.
