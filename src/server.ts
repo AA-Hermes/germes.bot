@@ -27,6 +27,7 @@ app.get('/health', async () => ({ status: 'ok' }));
 
 await app.register(bitrix24LocalAppRoutes, { prefix: '/b24' });
 await app.register(bitrix24Routes, { prefix: '/api/bitrix24' });
+await app.register(queueWorkerRoutes, { prefix: '/api' });
 
 try {
   await app.listen({
