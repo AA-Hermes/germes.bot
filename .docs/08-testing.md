@@ -26,7 +26,9 @@ Add or update tests when changing:
 - storage behavior;
 - public API behavior;
 - WorkflowService provider delegation;
-- provider failure fallback behavior.
+- provider failure fallback behavior;
+- OpenAI Responses API request/response mapping;
+- provider usage metadata mapping.
 
 Prefer deterministic unit tests for integration logic.
 

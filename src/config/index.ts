@@ -8,6 +8,11 @@ const schema = z.object({
   BITRIX24_CLIENT_SECRET: z.string().optional().or(z.literal('')),
   DATABASE_URL: z.string().url().optional().or(z.literal('')),
   INTEGRATION_STORAGE_FILE: z.string().default('.data/integration.json'),
+  OPENAI_API_KEY: z.string().optional().or(z.literal('')),
+  OPENAI_MODEL: z.string().default('gpt-6-luna'),
+  OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(16).default(1_200),
+  OPENAI_REASONING_EFFORT: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional().or(z.literal('')),
 });
 
 const env = schema.parse(process.env);
@@ -21,6 +26,13 @@ export const config = {
   },
   databaseUrl: env.DATABASE_URL || null,
   storageFile: env.INTEGRATION_STORAGE_FILE,
+  openai: {
+    apiKey: env.OPENAI_API_KEY || null,
+    model: env.OPENAI_MODEL,
+    timeoutMs: env.OPENAI_TIMEOUT_MS,
+    maxOutputTokens: env.OPENAI_MAX_OUTPUT_TOKENS,
+    reasoningEffort: env.OPENAI_REASONING_EFFORT || null,
+  },
 };
 
 export function isBitrixOAuthConfigured(): boolean {

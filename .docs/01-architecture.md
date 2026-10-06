@@ -56,7 +56,7 @@ Current implementations:
 
 `LLMProvider` is the provider contract. Bitrix24 code must depend on `WorkflowService`, not on a concrete model vendor.
 
-The current `EchoLLMProvider` preserves the existing `Получил: ...` behavior while the architecture is prepared for a real model provider.
+`EchoLLMProvider` preserves the existing `Получил: ...` behavior when no external provider is configured. `OpenAIProvider` implements the same contract through the OpenAI Responses API.
 
 Provider failures return a safe fallback reply and are logged with latency metadata.
 
