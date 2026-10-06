@@ -28,18 +28,9 @@ export class QueuedEventProcessor {
 
         await this.botService.sendMessage(event.conversationId, workflow.text);
         await this.queue.complete(event.id);
-
-        this.logger.info({
-          event: 'QUEUED_EVENT_COMPLETED',
-          queueId: event.id,
-          externalId: event.externalId,
-          attempts: event.attempts,
-        });
       } catch (error) {
         const errorName = error instanceof Error ? error.name : 'UnknownError';
-
         await this.queue.retry(event.id, event.attempts, errorName);
-
         this.logger.error({
           event: 'QUEUED_EVENT_FAILED',
           queueId: event.id,
