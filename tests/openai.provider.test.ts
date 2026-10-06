@@ -223,15 +223,21 @@ describe('OpenAIProvider', () => {
     ).rejects.toThrow('OpenAI Responses API error (HTTP 502, code unknown)');
   });
 
-  it('classifies exhausted API balance as a quota error', async () => {
+  it.each([
+    'credit_balance_exhausted',
+    'insufficient_quota',
+    'organization_spend_limit_exceeded',
+    'project_spend_limit_exceeded',
+    'organization_usage_limit_exceeded',
+  ])('classifies %s as a quota error', async (code) => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({
             error: {
-              code: 'credit_balance_exhausted',
-              message: 'You have no credits left',
+              code,
+              message: 'Billing or quota limit reached',
             },
           }),
           {
@@ -256,7 +262,7 @@ describe('OpenAIProvider', () => {
         kind: 'quota_exhausted',
         provider: 'openai',
         status: 429,
-        code: 'credit_balance_exhausted',
+        code,
       });
     }
   });
