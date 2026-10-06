@@ -1,3 +1,7 @@
+---
+title: Database
+---
+
 # Database
 
 ## Storage abstraction
