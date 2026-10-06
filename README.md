@@ -56,6 +56,22 @@ For OAuth calls:
 - when Bitrix24 returns `expired_token`, the service refreshes the token pair and retries the original call once;
 - refreshed tokens replace the previous token pair in storage.
 
+
+## Storage
+
+Production uses persistent Postgres storage when `DATABASE_URL` is configured. The recommended Vercel setup is Neon Postgres from the Vercel Marketplace.
+
+The storage implementation is selected automatically:
+
+```text
+DATABASE_URL set   -> PostgresIntegrationStorage
+DATABASE_URL empty -> FileIntegrationStorage
+```
+
+`PostgresIntegrationStorage` creates the `integration_state` table automatically on first access and stores the Bitrix24 bot ID, OAuth token pair, and installation metadata. No manual SQL migration is required for the MVP.
+
+`FileIntegrationStorage` remains available for local development only. Do not rely on it in Vercel production because the serverless filesystem is ephemeral.
+
 ## Configuration
 
 Copy:
@@ -70,6 +86,7 @@ Configure:
 APP_URL=https://germesbot.vercel.app
 BITRIX24_CLIENT_ID=...
 BITRIX24_CLIENT_SECRET=...
+DATABASE_URL=postgresql://...
 ```
 
 The registered bot callback is:
@@ -122,7 +139,7 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 ## MVP limitations
 
 - one Bitrix24 portal;
-- `FileIntegrationStorage` is suitable for local development only;
-- Vercel serverless filesystem is not durable, so production installation/tokens must move to persistent storage before relying on the integration;
+- production storage is Postgres when `DATABASE_URL` is configured;
+- file storage remains a local-development fallback;
 - duplicate-event protection is in memory;
 - no LLM / WorkflowService yet.
