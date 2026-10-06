@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import { LLMProviderError } from '../src/core/llm/llm-provider-error.js';
 import type {
   LLMGenerateInput,
   LLMProvider,
@@ -56,6 +57,34 @@ describe('WorkflowService', () => {
         outputTokens: 2,
       }),
     );
+  });
+
+  it('explains exhausted AI balance to the user', async () => {
+    const provider: LLMProvider = {
+      generateReply: vi.fn(async () => {
+        throw new LLMProviderError(
+          'OpenAI Responses API error (HTTP 429, code credit_balance_exhausted)',
+          'quota_exhausted',
+          'openai',
+          429,
+          'credit_balance_exhausted',
+        );
+      }),
+    };
+
+    const logger = createLogger();
+    const service = new WorkflowService(provider, logger);
+
+    await expect(
+      service.handleMessage({
+        channel: 'bitrix24',
+        conversationId: 'chat5',
+        text: 'Привет',
+      }),
+    ).resolves.toEqual({
+      text: 'Не удалось обработать сообщение: исчерпан баланс AI-сервиса. Обратитесь к администратору.',
+      provider: 'fallback',
+    });
   });
 
   it('returns a fallback reply when provider fails', async () => {
