@@ -31,13 +31,16 @@ Implemented:
 - persistent integration state in Postgres;
 - bot registration;
 - incoming message webhook;
-- echo reply;
+- channel-independent WorkflowService;
+- LLMProvider abstraction;
+- echo provider preserving the current reply behavior;
+- provider failure fallback reply;
+- workflow latency/token telemetry hooks;
 - structured logging;
 - tests and CI.
 
 Not implemented yet:
-- LLM provider integration;
-- WorkflowService;
+- concrete external LLM provider integration;
 - conversation memory;
 - additional channels such as Telegram.
 

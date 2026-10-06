@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { isBitrixOAuthConfigured } from '../../../config/index.js';
 import type { IntegrationStorage } from '../../../storage/integration-storage.js';
+import { WorkflowService } from '../../../core/workflow/workflow.service.js';
 import { BotService } from '../services/bot.service.js';
 import { EventService } from '../services/event.service.js';
 
@@ -24,6 +25,7 @@ export class BotController {
     private readonly botService: BotService,
     private readonly eventService: EventService,
     private readonly storage: IntegrationStorage,
+    private readonly workflowService: WorkflowService,
   ) {}
 
   register = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -120,8 +122,19 @@ export class BotController {
       dialogId: event.dialogId,
     });
 
-    await this.botService.sendMessage(event.dialogId, `Получил: ${event.text}`);
+    const workflow = await this.workflowService.handleMessage({
+      channel: 'bitrix24',
+      conversationId: event.dialogId,
+      userId: String(event.authorId),
+      text: event.text,
+    });
 
-    return reply.send({ status: 'ok' });
+    await this.botService.sendMessage(event.dialogId, workflow.text);
+
+    return reply.send({
+      status: 'ok',
+      provider: workflow.provider,
+      model: workflow.model,
+    });
   };
 }

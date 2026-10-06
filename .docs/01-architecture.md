@@ -10,12 +10,15 @@ Bitrix24 is an adapter/channel, not the application core.
 
 Keep HTTP, business logic, transport, and persistence separated.
 
-Current request flow:
+Current message flow:
 
 ```text
-HTTP
-  -> Controller
-    -> BotService / EventService
+Bitrix24 webhook
+  -> BotController
+    -> EventService
+    -> WorkflowService
+      -> LLMProvider
+    -> BotService
       -> Bitrix24RestClient
         -> Bitrix24OAuthService
       -> IntegrationStorage
@@ -47,9 +50,17 @@ Current implementations:
 - `PostgresIntegrationStorage` for production;
 - `FileIntegrationStorage` for local development.
 
-### Future core
+### Workflow core
 
-AI logic should be introduced behind a channel-independent workflow layer, for example:
+`WorkflowService` is channel-independent and owns message processing orchestration.
+
+`LLMProvider` is the provider contract. Bitrix24 code must depend on `WorkflowService`, not on a concrete model vendor.
+
+The current `EchoLLMProvider` preserves the existing `Получил: ...` behavior while the architecture is prepared for a real model provider.
+
+Provider failures return a safe fallback reply and are logged with latency metadata.
+
+Future conversation history should be introduced behind a dedicated `ConversationStorage` abstraction:
 
 ```text
 Channel Adapter
@@ -58,4 +69,4 @@ Channel Adapter
     -> ConversationStorage
 ```
 
-Do not place LLM-specific behavior inside Bitrix24 controllers or services.
+Do not place provider-specific or prompt-specific behavior inside Bitrix24 controllers or services.
