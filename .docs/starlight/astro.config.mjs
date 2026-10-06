@@ -1,3 +1,4 @@
+import { URL } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
