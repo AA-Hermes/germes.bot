@@ -10,7 +10,7 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 - incoming message webhook
 - Postgres-backed incoming event queue in production
 - non-blocking Vercel background processing with `waitUntil()`
-- scheduled Vercel Cron recovery for retries and stale queue leases
+- scheduled recovery for retries and stale queue leases
 - channel-independent `WorkflowService`
 - configurable `LLMProvider`
 - OpenAI Responses API provider
@@ -163,7 +163,7 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 8. Bitrix24 calls `POST /api/bitrix24/webhook`.
 9. The validated message is persisted in Postgres and the webhook immediately acknowledges it.
 10. A Vercel background task claims the queued event and calls `WorkflowService`.
-11. A scheduled Vercel queue worker independently recovers retries and stale leases.
+11. A scheduled queue recovery workflow independently recovers retries and stale leases.
 12. `WorkflowService` sends the message to the configured LLM provider.
 13. Hermes AI replies with the provider response. Without `OPENAI_API_KEY`, the echo fallback replies `Получил: Привет`.
 
