@@ -5,6 +5,7 @@ import qs from 'qs';
 import { config } from './config/index.js';
 import { bitrix24LocalAppRoutes } from './modules/bitrix24/local-app.routes.js';
 import { bitrix24Routes } from './modules/bitrix24/routes.js';
+import { queueWorkerRoutes } from './modules/queue-worker.routes.js';
 
 const app = Fastify({
   logger: true,
