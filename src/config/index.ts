@@ -11,7 +11,7 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional().or(z.literal('')),
   OPENAI_MODEL: z.string().default('gpt-6-luna'),
   OPENAI_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
-  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(500),
+  OPENAI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(16).default(1_200),
 });
 
 const env = schema.parse(process.env);
