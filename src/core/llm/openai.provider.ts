@@ -49,7 +49,15 @@ function safeErrorCode(code: string | undefined): string {
 }
 
 function mapErrorKind(status: number, code: string): LLMProviderErrorKind {
-  if (code === 'credit_balance_exhausted' || code === 'insufficient_quota') {
+  if (
+    [
+      'credit_balance_exhausted',
+      'insufficient_quota',
+      'organization_spend_limit_exceeded',
+      'project_spend_limit_exceeded',
+      'organization_usage_limit_exceeded',
+    ].includes(code)
+  ) {
     return 'quota_exhausted';
   }
 
