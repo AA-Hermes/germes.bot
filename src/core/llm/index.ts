@@ -8,10 +8,15 @@ export function createLLMProvider(): LLMProvider {
     return new EchoLLMProvider();
   }
 
+  const reasoningEffort =
+    config.openai.reasoningEffort ??
+    (config.openai.model === 'gpt-6-luna' ? 'low' : null);
+
   return new OpenAIProvider(
     config.openai.apiKey,
     config.openai.model,
     config.openai.timeoutMs,
     config.openai.maxOutputTokens,
+    reasoningEffort,
   );
 }
