@@ -12,7 +12,6 @@ interface QueueRow {
 }
 
 const MAX_ATTEMPTS = 5;
-const STALE_LEASE = '5 minutes';
 
 export class PostgresEventQueue implements EventQueue {
   private readonly sql: ReturnType<typeof neon>;
