@@ -133,9 +133,12 @@ export class BotController {
       if (!queued) return reply.send({ status: 'duplicate' });
 
       this.scheduleBackground(
-        this.queuedEventProcessor.processAvailable().catch((error) => {
-          request.log.error({ event: 'QUEUE_PROCESSOR_ERROR', err: error });
-        }),
+        this.queuedEventProcessor
+          .processAvailable()
+          .then(() => undefined)
+          .catch((error) => {
+            request.log.error({ event: 'QUEUE_PROCESSOR_ERROR', err: error });
+          }),
       );
 
       return reply.send({ status: 'queued' });
