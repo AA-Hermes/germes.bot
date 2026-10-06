@@ -48,8 +48,10 @@ describe('QueuedEventProcessor', () => {
       })),
     };
 
+    const preparedMessage = { preparedCall: {}, params: {} };
     const botService = {
-      sendMessage: vi.fn(async () => ({ id: 670326 })),
+      prepareMessage: vi.fn(async () => preparedMessage),
+      sendPreparedMessage: vi.fn(async () => ({ id: 670326 })),
     };
 
     const processor = new QueuedEventProcessor(
@@ -63,7 +65,8 @@ describe('QueuedEventProcessor', () => {
 
     expect(queue.claim).toHaveBeenCalledWith(1);
     expect(queue.beginDelivery).toHaveBeenCalledWith(42);
-    expect(botService.sendMessage).toHaveBeenCalledWith('1', 'OPENAI');
+    expect(botService.prepareMessage).toHaveBeenCalledWith('1', 'OPENAI');
+    expect(botService.sendPreparedMessage).toHaveBeenCalledWith(preparedMessage);
     expect(queue.markDelivered).toHaveBeenCalledWith(42, 670326);
     expect(queue.failDelivery).not.toHaveBeenCalled();
     expect(queue.retry).not.toHaveBeenCalled();
@@ -79,7 +82,8 @@ describe('QueuedEventProcessor', () => {
     };
 
     const botService = {
-      sendMessage: vi.fn(),
+      prepareMessage: vi.fn(),
+      sendPreparedMessage: vi.fn(),
     };
 
     const processor = new QueuedEventProcessor(
@@ -92,8 +96,41 @@ describe('QueuedEventProcessor', () => {
     await processor.processAvailable(1);
 
     expect(queue.beginDelivery).not.toHaveBeenCalled();
-    expect(botService.sendMessage).not.toHaveBeenCalled();
+    expect(botService.prepareMessage).not.toHaveBeenCalled();
+    expect(botService.sendPreparedMessage).not.toHaveBeenCalled();
     expect(queue.retry).toHaveBeenCalledWith(43, 2, 'Error');
+    expect(queue.failDelivery).not.toHaveBeenCalled();
+  });
+
+  it('retries Bitrix preflight failures before outbound delivery starts', async () => {
+    const queue = createQueue({ id: 44, externalId: '670326', attempts: 2 });
+
+    const workflowService = {
+      handleMessage: vi.fn(async () => ({
+        text: 'OPENAI',
+        provider: 'openai',
+      })),
+    };
+
+    const botService = {
+      prepareMessage: vi.fn(async () => {
+        throw new Error('Bitrix application is not installed');
+      }),
+      sendPreparedMessage: vi.fn(),
+    };
+
+    const processor = new QueuedEventProcessor(
+      queue,
+      workflowService as never,
+      botService as never,
+      createLogger(),
+    );
+
+    await processor.processAvailable(1);
+
+    expect(queue.beginDelivery).not.toHaveBeenCalled();
+    expect(botService.sendPreparedMessage).not.toHaveBeenCalled();
+    expect(queue.retry).toHaveBeenCalledWith(44, 2, 'Error');
     expect(queue.failDelivery).not.toHaveBeenCalled();
   });
 
@@ -108,7 +145,8 @@ describe('QueuedEventProcessor', () => {
     };
 
     const botService = {
-      sendMessage: vi.fn(async () => {
+      prepareMessage: vi.fn(async () => ({ preparedCall: {}, params: {} })),
+      sendPreparedMessage: vi.fn(async () => {
         throw new Error('Bitrix unavailable');
       }),
     };
