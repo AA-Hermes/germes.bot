@@ -201,6 +201,27 @@ describe('OpenAIProvider', () => {
     expect(body.reasoning).toBeUndefined();
   });
 
+  it('sanitizes non-JSON error responses without exposing the response body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('gateway authentication failure', {
+          status: 502,
+          headers: { 'content-type': 'text/plain' },
+        }),
+      ),
+    );
+
+    const provider = new OpenAIProvider('test-key', 'gpt-6-luna', 5_000, 1_200);
+
+    await expect(
+      provider.generateReply({
+        message: 'Привет',
+        conversationId: 'chat5',
+      }),
+    ).rejects.toThrow('OpenAI Responses API error (HTTP 502, code unknown)');
+  });
+
   it('does not propagate provider error messages that may contain credential-derived data', async () => {
     vi.stubGlobal(
       'fetch',
