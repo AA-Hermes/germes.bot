@@ -65,3 +65,10 @@ Vercel production uses `waitUntil()` from `@vercel/functions` so the HTTP webhoo
 The Postgres row is persisted before the background task is scheduled. If a Function stops unexpectedly, the row remains recoverable instead of losing the incoming Bitrix24 message.
 
 When `DATABASE_URL` is not configured, local development keeps the previous synchronous webhook behavior.
+
+
+## Recovery trigger
+
+Each accepted webhook schedules a background processor immediately. Pending or stale events are also eligible to be claimed by later webhook-triggered processors.
+
+A dedicated scheduled recovery trigger is intentionally not part of this PR; the durable Postgres row makes that a separate operational improvement without changing the webhook contract.
