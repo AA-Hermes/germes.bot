@@ -46,14 +46,15 @@ export class PostgresIntegrationStorage implements IntegrationStorage {
   private async getState(): Promise<StateRow> {
     await this.ensureSchema();
 
-    const rows = await this.sql`
+    const result = await this.sql`
       SELECT bot_id, tokens, installation
       FROM integration_state
       WHERE integration_key = ${STATE_KEY}
       LIMIT 1
     `;
 
-    const row = rows[0] as StateRow | undefined;
+    const rows = result as unknown as StateRow[];
+    const row = rows[0];
 
     return {
       bot_id: row?.bot_id == null ? null : Number(row.bot_id),
