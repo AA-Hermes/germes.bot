@@ -1,15 +1,19 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { isBitrixOAuthConfigured } from '../../../config/index.js';
+import type { WorkflowService } from '../../../core/workflow/workflow.service.js';
+import type { EventQueue } from '../../../queue/event-queue.js';
 import type { IntegrationStorage } from '../../../storage/integration-storage.js';
-import { WorkflowService } from '../../../core/workflow/workflow.service.js';
 import { BotService } from '../services/bot.service.js';
 import { EventService } from '../services/event.service.js';
+import type { QueuedEventProcessor } from '../services/queued-event-processor.service.js';
 
 interface TestBody {
   dialogId: string | number;
   message?: string;
 }
+
+type BackgroundScheduler = (task: Promise<void>) => void;
 
 function safeSecretEqual(actual: string | null, expected: string | null): boolean {
   if (!actual || !expected) return false;
@@ -26,6 +30,9 @@ export class BotController {
     private readonly eventService: EventService,
     private readonly storage: IntegrationStorage,
     private readonly workflowService: WorkflowService,
+    private readonly eventQueue: EventQueue | null = null,
+    private readonly queuedEventProcessor: QueuedEventProcessor | null = null,
+    private readonly scheduleBackground: BackgroundScheduler | null = null,
   ) {}
 
   register = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -106,6 +113,34 @@ export class BotController {
     const botId = await this.botService.getBotId();
 
     if (botId && event.authorId === botId) return reply.send({ status: 'ignored' });
+
+    request.log.info({
+      event: 'BOT_MESSAGE_RECEIVED',
+      messageId: event.messageId,
+      authorId: event.authorId,
+      dialogId: event.dialogId,
+    });
+
+    if (this.eventQueue && this.queuedEventProcessor && this.scheduleBackground) {
+      const queued = await this.eventQueue.enqueue({
+        channel: 'bitrix24',
+        externalId: String(event.messageId),
+        conversationId: event.dialogId,
+        userId: String(event.authorId),
+        text: event.text,
+      });
+
+      if (!queued) return reply.send({ status: 'duplicate' });
+
+      this.scheduleBackground(
+        this.queuedEventProcessor.processAvailable().catch((error) => {
+          request.log.error({ event: 'QUEUE_PROCESSOR_ERROR', err: error });
+        }),
+      );
+
+      return reply.send({ status: 'queued' });
+    }
+
     if (this.seenMessageIds.has(event.messageId)) return reply.send({ status: 'duplicate' });
 
     this.seenMessageIds.add(event.messageId);
@@ -114,13 +149,6 @@ export class BotController {
       const oldest = this.seenMessageIds.values().next().value as number | undefined;
       if (oldest !== undefined) this.seenMessageIds.delete(oldest);
     }
-
-    request.log.info({
-      event: 'BOT_MESSAGE_RECEIVED',
-      messageId: event.messageId,
-      authorId: event.authorId,
-      dialogId: event.dialogId,
-    });
 
     const workflow = await this.workflowService.handleMessage({
       channel: 'bitrix24',
