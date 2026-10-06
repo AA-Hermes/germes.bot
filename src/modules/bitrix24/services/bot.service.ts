@@ -58,15 +58,36 @@ export class BotService {
     return this.storage.getBotId();
   }
 
-  async sendMessage(dialogId: string | number, message: string): Promise<SendMessageResult> {
+  async prepareMessage(
+    dialogId: string | number,
+    message: string,
+  ): Promise<{
+    preparedCall: Awaited<ReturnType<Bitrix24RestClient['prepareCall']>>;
+    params: Record<string, unknown>;
+  }> {
     const botId = await this.storage.getBotId();
     if (!botId) throw new Error('Hermes AI bot is not registered');
 
-    const result = await this.client.call<SendMessageResult>('imbot.v2.Chat.Message.send', {
-      botId,
-      dialogId: String(dialogId),
-      fields: { message },
-    });
+    return {
+      preparedCall: await this.client.prepareCall(),
+      params: {
+        botId,
+        dialogId: String(dialogId),
+        fields: { message },
+      },
+    };
+  }
+
+  async sendPreparedMessage(
+    prepared: Awaited<ReturnType<BotService['prepareMessage']>>,
+  ): Promise<SendMessageResult> {
+    const result = await this.client.callPrepared<SendMessageResult>(
+      prepared.preparedCall,
+      'imbot.v2.Chat.Message.send',
+      prepared.params,
+    );
+    const botId = prepared.params.botId;
+    const dialogId = String(prepared.params.dialogId);
 
     this.logger.info({
       event: 'BOT_MESSAGE_SENT',
@@ -76,6 +97,11 @@ export class BotService {
     });
 
     return result;
+  }
+
+  async sendMessage(dialogId: string | number, message: string): Promise<SendMessageResult> {
+    const prepared = await this.prepareMessage(dialogId, message);
+    return this.sendPreparedMessage(prepared);
   }
 
   async unregister(): Promise<void> {
