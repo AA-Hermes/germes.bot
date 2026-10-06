@@ -8,7 +8,10 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 - Bitrix24 local application OAuth
 - Hermes AI bot registration
 - incoming message webhook
-- echo reply: `Получил: {message}`
+- channel-independent `WorkflowService`
+- configurable `LLMProvider`
+- OpenAI Responses API provider
+- EchoLLMProvider fallback when no OpenAI key is configured
 - OAuth token refresh on `expired_token`
 - structured logging
 - health endpoint
@@ -18,9 +21,13 @@ Standalone Hermes integration service. Bitrix24 is the first channel adapter; fu
 ## Architecture
 
 ```text
-HTTP
-  -> Controller
-    -> BotService / EventService
+Bitrix24 webhook
+  -> BotController
+    -> EventService
+    -> WorkflowService
+      -> LLMProvider
+        -> OpenAIProvider / EchoLLMProvider
+    -> BotService
       -> Bitrix24RestClient
         -> Bitrix24OAuthService
       -> IntegrationStorage
@@ -87,7 +94,17 @@ APP_URL=https://germesbot.vercel.app
 BITRIX24_CLIENT_ID=...
 BITRIX24_CLIENT_SECRET=...
 DATABASE_URL=postgresql://...
+
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-6-luna
+OPENAI_TIMEOUT_MS=20000
+OPENAI_MAX_OUTPUT_TOKENS=1200
+OPENAI_REASONING_EFFORT=
 ```
+
+If `OPENAI_API_KEY` is not set, the service uses `EchoLLMProvider` and keeps the legacy `Получил: ...` response behavior.
+
+`OPENAI_REASONING_EFFORT` is optional and should only be set for models that support reasoning options. For the default `gpt-6-luna`, the service uses `low` when no explicit value is configured.
 
 The registered bot callback is:
 
@@ -134,7 +151,8 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 6. Find **Hermes AI** in Bitrix24 Messenger.
 7. Send `Привет`.
 8. Bitrix24 calls `POST /api/bitrix24/webhook`.
-9. Hermes AI replies `Получил: Привет`.
+9. `WorkflowService` sends the message to the configured LLM provider.
+10. Hermes AI replies with the provider response. Without `OPENAI_API_KEY`, the echo fallback replies `Получил: Привет`.
 
 ## MVP limitations
 
@@ -142,4 +160,4 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 - production storage is Postgres when `DATABASE_URL` is configured;
 - file storage remains a local-development fallback;
 - duplicate-event protection is in memory;
-- no LLM / WorkflowService yet.
+- no persistent conversation history yet.
