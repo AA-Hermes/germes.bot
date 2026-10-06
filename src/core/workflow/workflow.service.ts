@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { LLMProviderError } from '../llm/llm-provider-error.js';
 import type { LLMProvider } from '../llm/llm-provider.js';
 
 export interface WorkflowMessage {
@@ -12,6 +13,25 @@ export interface WorkflowResult {
   text: string;
   provider: string;
   model?: string;
+}
+
+function getUserFacingErrorMessage(error: unknown): string {
+  if (!(error instanceof LLMProviderError)) {
+    return 'Не удалось обработать сообщение. Попробуйте ещё раз.';
+  }
+
+  switch (error.kind) {
+    case 'quota_exhausted':
+      return 'Не удалось обработать сообщение: исчерпан баланс AI-сервиса. Обратитесь к администратору.';
+    case 'authentication_failed':
+      return 'Не удалось обработать сообщение: ошибка авторизации AI-сервиса. Обратитесь к администратору.';
+    case 'rate_limited':
+      return 'AI-сервис временно достиг лимита запросов. Попробуйте ещё раз немного позже.';
+    case 'timeout':
+      return 'AI-сервис не успел ответить вовремя. Попробуйте ещё раз.';
+    default:
+      return 'Не удалось обработать сообщение. Попробуйте ещё раз.';
+  }
 }
 
 export class WorkflowService {
@@ -56,7 +76,7 @@ export class WorkflowService {
       });
 
       return {
-        text: 'Не удалось обработать сообщение. Попробуйте ещё раз.',
+        text: getUserFacingErrorMessage(error),
         provider: 'fallback',
       };
     }
