@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { config, isBitrixConfigured } from '../../../config/index.js';
+import { isBitrixOAuthConfigured } from '../../../config/index.js';
+import type { IntegrationStorage } from '../../../storage/integration-storage.js';
 import { BotService } from '../services/bot.service.js';
 import { EventService } from '../services/event.service.js';
 
@@ -22,10 +23,20 @@ export class BotController {
   constructor(
     private readonly botService: BotService,
     private readonly eventService: EventService,
+    private readonly storage: IntegrationStorage,
   ) {}
 
   register = async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!isBitrixConfigured()) return reply.code(503).send({ error: 'Bitrix24 is not configured' });
+    if (!isBitrixOAuthConfigured()) {
+      return reply.code(503).send({ error: 'Bitrix24 OAuth credentials are not configured' });
+    }
+
+    const installation = await this.storage.getBitrix24Installation();
+    const tokens = await this.storage.getTokens();
+
+    if (!installation || !tokens) {
+      return reply.code(503).send({ error: 'Bitrix24 application is not installed' });
+    }
 
     try {
       return await this.botService.register();
@@ -36,11 +47,21 @@ export class BotController {
   };
 
   status = async () => {
-    const configured = isBitrixConfigured();
-    const registered = configured ? await this.botService.isRegistered() : false;
+    const oauthConfigured = isBitrixOAuthConfigured();
+    const installation = await this.storage.getBitrix24Installation();
+    const tokens = await this.storage.getTokens();
+    const installed = Boolean(installation && tokens);
+
+    let registered = false;
+
+    if (oauthConfigured && installed) {
+      registered = await this.botService.isRegistered();
+    }
 
     return {
-      configured,
+      configured: oauthConfigured,
+      installed,
+      domain: installation?.domain ?? null,
       registered,
       botId: registered ? await this.botService.getBotId() : null,
       name: 'Hermes AI',
@@ -69,7 +90,13 @@ export class BotController {
 
     if (!event) return reply.send({ status: 'ignored' });
 
-    if (!safeSecretEqual(event.applicationToken, config.bitrix24.applicationToken)) {
+    const installation = await this.storage.getBitrix24Installation();
+
+    if (
+      !installation ||
+      !safeSecretEqual(event.applicationToken, installation.applicationToken) ||
+      event.domain !== installation.domain
+    ) {
       request.log.warn({ event: 'BOT_WEBHOOK_UNAUTHORIZED', domain: event.domain });
       return reply.code(401).send({ status: 'unauthorized' });
     }
