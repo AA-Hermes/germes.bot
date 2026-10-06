@@ -21,6 +21,7 @@ The repository documentation is located in [`./.docs/`](./.docs/).
 - Git / PR work → [`./.docs/11-git.md`](./.docs/11-git.md)
 - Vercel / deployment / documentation publishing → [`./.docs/12-deployment.md`](./.docs/12-deployment.md)
 - LLM / prompt / model provider changes → [`./.docs/13-llm.md`](./.docs/13-llm.md)
+- Webhook queue / async event processing → [`./.docs/14-event-queue.md`](./.docs/14-event-queue.md)
 
 ## Documentation structure
 
