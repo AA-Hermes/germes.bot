@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import qs from 'qs';
 import { bitrix24LocalAppRoutes } from './modules/bitrix24/local-app.routes.js';
 import { bitrix24Routes } from './modules/bitrix24/routes.js';
+import { queueWorkerRoutes } from './modules/queue-worker.routes.js';
 
 export async function createApp() {
   const app = Fastify({
@@ -26,6 +27,7 @@ export async function createApp() {
 
   await app.register(bitrix24LocalAppRoutes, { prefix: '/b24' });
   await app.register(bitrix24Routes, { prefix: '/api/bitrix24' });
+  await app.register(queueWorkerRoutes, { prefix: '/api' });
 
   return app;
 }
