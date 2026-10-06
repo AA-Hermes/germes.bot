@@ -7,6 +7,7 @@ import type {
 interface OpenAIResponseContent {
   type?: string;
   text?: string;
+  refusal?: string;
 }
 
 interface OpenAIResponseOutput {
@@ -17,6 +18,10 @@ interface OpenAIResponseOutput {
 interface OpenAIResponsePayload {
   id?: string;
   model?: string;
+  status?: string;
+  incomplete_details?: {
+    reason?: string;
+  };
   output_text?: string;
   output?: OpenAIResponseOutput[];
   usage?: {
@@ -59,6 +64,9 @@ export class OpenAIProvider implements LLMProvider {
               content: input.message,
             },
           ],
+          reasoning: {
+            effort: 'low',
+          },
           max_output_tokens: this.maxOutputTokens,
         }),
         signal: controller.signal,
@@ -73,10 +81,15 @@ export class OpenAIProvider implements LLMProvider {
         );
       }
 
+      if (payload.status === 'incomplete') {
+        const reason = payload.incomplete_details?.reason ?? 'unknown';
+        throw new Error(`OpenAI Responses API returned incomplete output: ${reason}`);
+      }
+
       const text = this.extractText(payload);
 
       if (!text) {
-        throw new Error('OpenAI Responses API returned no text output');
+        throw new Error('OpenAI Responses API returned no user-facing output');
       }
 
       return {
@@ -98,19 +111,26 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   private extractText(payload: OpenAIResponsePayload): string | null {
-    if (typeof payload.output_text === 'string' && payload.output_text.trim()) {
-      return payload.output_text.trim();
-    }
+    const parts: string[] = [];
 
-    for (const item of payload.output ?? []) {
-      for (const content of item.content ?? []) {
-        if (content.type === 'output_text' && typeof content.text === 'string') {
-          const text = content.text.trim();
-          if (text) return text;
+    if (typeof payload.output_text === 'string' && payload.output_text.trim()) {
+      parts.push(payload.output_text.trim());
+    } else {
+      for (const item of payload.output ?? []) {
+        for (const content of item.content ?? []) {
+          if (content.type === 'output_text' && typeof content.text === 'string') {
+            const text = content.text.trim();
+            if (text) parts.push(text);
+          }
+
+          if (content.type === 'refusal' && typeof content.refusal === 'string') {
+            const refusal = content.refusal.trim();
+            if (refusal) parts.push(refusal);
+          }
         }
       }
     }
 
-    return null;
+    return parts.length > 0 ? parts.join('\n') : null;
   }
 }
