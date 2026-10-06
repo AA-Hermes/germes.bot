@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../../config/index.js';
-import { EchoLLMProvider } from '../../core/llm/echo.provider.js';
+import { createLLMProvider } from '../../core/llm/index.js';
 import { WorkflowService } from '../../core/workflow/workflow.service.js';
 import { getIntegrationStorage } from '../../storage/index.js';
 import { BotController } from './controllers/bot.controller.js';
@@ -24,7 +24,7 @@ export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
     app.log,
     `${config.appUrl}/api/bitrix24/webhook`,
   );
-  const workflowService = new WorkflowService(new EchoLLMProvider(), app.log);
+  const workflowService = new WorkflowService(createLLMProvider(), app.log);
   const controller = new BotController(
     botService,
     new EventService(),
