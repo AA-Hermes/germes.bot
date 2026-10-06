@@ -18,6 +18,8 @@ export class QueuedEventProcessor {
       const [event] = await this.queue.claim(1);
       if (!event) break;
 
+      let deliveryStarted = false;
+
       try {
         const workflow = await this.workflowService.handleMessage({
           channel: event.channel,
@@ -26,18 +28,52 @@ export class QueuedEventProcessor {
           text: event.text,
         });
 
-        await this.botService.sendMessage(event.conversationId, workflow.text);
-        await this.queue.complete(event.id);
-      } catch (error) {
-        const errorName = error instanceof Error ? error.name : 'UnknownError';
-        await this.queue.retry(event.id, event.attempts, errorName);
-        this.logger.error({
-          event: 'QUEUED_EVENT_FAILED',
+        deliveryStarted = await this.queue.beginDelivery(event.id);
+
+        if (!deliveryStarted) {
+          this.logger.warn({
+            event: 'QUEUED_EVENT_DELIVERY_SKIPPED',
+            queueId: event.id,
+            externalId: event.externalId,
+          });
+          processed += 1;
+          continue;
+        }
+
+        const sent = await this.botService.sendMessage(event.conversationId, workflow.text);
+        await this.queue.markDelivered(event.id, sent.id);
+
+        this.logger.info({
+          event: 'QUEUED_EVENT_COMPLETED',
           queueId: event.id,
           externalId: event.externalId,
           attempts: event.attempts,
-          err: error,
+          outboundMessageId: sent.id,
         });
+      } catch (error) {
+        const errorName = error instanceof Error ? error.name : 'UnknownError';
+
+        if (deliveryStarted) {
+          await this.queue.failDelivery(event.id, errorName);
+
+          this.logger.error({
+            event: 'QUEUED_EVENT_DELIVERY_UNCERTAIN',
+            queueId: event.id,
+            externalId: event.externalId,
+            attempts: event.attempts,
+            err: error,
+          });
+        } else {
+          await this.queue.retry(event.id, event.attempts, errorName);
+
+          this.logger.error({
+            event: 'QUEUED_EVENT_FAILED',
+            queueId: event.id,
+            externalId: event.externalId,
+            attempts: event.attempts,
+            err: error,
+          });
+        }
       }
 
       processed += 1;
