@@ -115,6 +115,8 @@ If `OPENAI_API_KEY` is not set, the service uses `EchoLLMProvider` and keeps the
 
 `OPENAI_REASONING_EFFORT` is optional and should only be set for models that support reasoning options. For the default `gpt-6-luna`, the service uses `low` when no explicit value is configured.
 
+Configure the same `CRON_SECRET` in both Vercel environment variables and GitHub Actions repository secrets. `.github/workflows/queue-worker.yml` calls the protected queue recovery endpoint every five minutes.
+
 The registered bot callback is:
 
 ```text
@@ -173,5 +175,6 @@ docker run --rm -p 3000:3000 --env-file .env germes-bot
 - production storage is Postgres when `DATABASE_URL` is configured;
 - file storage remains a local-development fallback;
 - persistent duplicate-event protection is provided by the Postgres event queue in production;
+- outbound Bitrix24 delivery uses a persisted delivery state; ambiguous sends are not automatically retried, preventing duplicate user-visible replies at the cost of requiring manual inspection for `unknown` delivery state;
 - local development without `DATABASE_URL` keeps in-memory duplicate protection and synchronous processing;
 - no persistent conversation history yet.
