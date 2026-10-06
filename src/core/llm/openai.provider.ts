@@ -34,12 +34,20 @@ interface OpenAIResponsePayload {
   };
 }
 
+type ReasoningEffort = 'low' | 'medium' | 'high';
+
+function safeErrorCode(code: string | undefined): string {
+  if (!code) return 'unknown';
+  return /^[a-zA-Z0-9_.-]+$/.test(code) ? code : 'unknown';
+}
+
 export class OpenAIProvider implements LLMProvider {
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
     private readonly timeoutMs: number,
     private readonly maxOutputTokens: number,
+    private readonly reasoningEffort: ReasoningEffort | null = null,
   ) {}
 
   async generateReply(input: LLMGenerateInput): Promise<LLMGenerateResult> {
@@ -47,6 +55,25 @@ export class OpenAIProvider implements LLMProvider {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
+      const requestBody: Record<string, unknown> = {
+        model: this.model,
+        instructions:
+          'You are Hermes AI, a concise business assistant. Reply in the language used by the user unless they ask for another language.',
+        input: [
+          {
+            role: 'user',
+            content: input.message,
+          },
+        ],
+        max_output_tokens: this.maxOutputTokens,
+      };
+
+      if (this.reasoningEffort) {
+        requestBody.reasoning = {
+          effort: this.reasoningEffort,
+        };
+      }
+
       const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
@@ -54,21 +81,7 @@ export class OpenAIProvider implements LLMProvider {
           'content-type': 'application/json',
           accept: 'application/json',
         },
-        body: JSON.stringify({
-          model: this.model,
-          instructions:
-            'You are Hermes AI, a concise business assistant. Reply in the language used by the user unless they ask for another language.',
-          input: [
-            {
-              role: 'user',
-              content: input.message,
-            },
-          ],
-          reasoning: {
-            effort: 'low',
-          },
-          max_output_tokens: this.maxOutputTokens,
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
@@ -76,8 +89,7 @@ export class OpenAIProvider implements LLMProvider {
 
       if (!response.ok || payload.error) {
         throw new Error(
-          payload.error?.message ||
-            `OpenAI Responses API returned HTTP ${response.status}`,
+          `OpenAI Responses API error (HTTP ${response.status}, code ${safeErrorCode(payload.error?.code)})`,
         );
       }
 
