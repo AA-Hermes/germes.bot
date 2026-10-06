@@ -34,7 +34,13 @@ interface OpenAIResponsePayload {
   };
 }
 
-type ReasoningEffort = 'low' | 'medium' | 'high';
+type ReasoningEffort =
+  | 'none'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
 
 function safeErrorCode(code: string | undefined): string {
   if (!code) return 'unknown';
@@ -85,7 +91,19 @@ export class OpenAIProvider implements LLMProvider {
         signal: controller.signal,
       });
 
-      const payload = (await response.json()) as OpenAIResponsePayload;
+      let payload: OpenAIResponsePayload = {};
+
+      try {
+        payload = (await response.json()) as OpenAIResponsePayload;
+      } catch {
+        if (!response.ok) {
+          throw new Error(
+            `OpenAI Responses API error (HTTP ${response.status}, code unknown)`,
+          );
+        }
+
+        throw new Error('OpenAI Responses API returned invalid JSON');
+      }
 
       if (!response.ok || payload.error) {
         throw new Error(
