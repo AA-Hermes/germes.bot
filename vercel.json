@@ -6,11 +6,5 @@
       "source": "/(.*)",
       "destination": "/api/index"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/queue/process",
-      "schedule": "* * * * *"
-    }
   ]
 }
