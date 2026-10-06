@@ -1,4 +1,4 @@
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 import type {
   AuthTokens,
   Bitrix24Installation,
@@ -14,7 +14,7 @@ interface StateRow {
 const STATE_KEY = 'bitrix24';
 
 export class PostgresIntegrationStorage implements IntegrationStorage {
-  private readonly sql: NeonQueryFunction<false, false>;
+  private readonly sql: ReturnType<typeof neon>;
   private initialized = false;
 
   constructor(databaseUrl: string) {
