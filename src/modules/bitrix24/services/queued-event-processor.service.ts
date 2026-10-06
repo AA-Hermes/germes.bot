@@ -11,10 +11,13 @@ export class QueuedEventProcessor {
     private readonly logger: FastifyBaseLogger,
   ) {}
 
-  async processAvailable(limit = 5): Promise<void> {
-    const events = await this.queue.claim(limit);
+  async processAvailable(limit = 5): Promise<number> {
+    let processed = 0;
 
-    for (const event of events) {
+    while (processed < limit) {
+      const [event] = await this.queue.claim(1);
+      if (!event) break;
+
       try {
         const workflow = await this.workflowService.handleMessage({
           channel: event.channel,
@@ -45,6 +48,10 @@ export class QueuedEventProcessor {
           err: error,
         });
       }
+
+      processed += 1;
     }
+
+    return processed;
   }
 }
