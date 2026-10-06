@@ -84,6 +84,8 @@ When the raw REST payload contains multiple `output_text` parts, the provider co
 
 Never log API keys, Authorization headers, or raw provider error messages. OpenAI error responses are converted to a typed safe local error containing only provider metadata, HTTP status, and a sanitized error code. Non-JSON error bodies are never propagated into local error messages. User-facing replies must describe the failure category without exposing raw provider response bodies or credentials.
 
+Billing and quota codes such as `credit_balance_exhausted`, `insufficient_quota`, `organization_spend_limit_exceeded`, `project_spend_limit_exceeded`, and `organization_usage_limit_exceeded` are classified as `quota_exhausted`, not as temporary rate limits.
+
 ## Token usage
 
 When the provider returns usage metadata, map:
