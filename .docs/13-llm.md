@@ -46,6 +46,15 @@ Default model:
 gpt-6-luna
 ```
 
+Default response settings:
+
+```text
+reasoning.effort = low
+OPENAI_MAX_OUTPUT_TOKENS = 1200
+```
+
+`OPENAI_MAX_OUTPUT_TOKENS` must be at least 16.
+
 The model is configuration, not application architecture. Do not hard-code model behavior into Bitrix24 adapters or WorkflowService.
 
 ## Prompting
@@ -57,6 +66,12 @@ When prompt behavior becomes business-specific or versioned, move it behind a de
 ## Errors
 
 Provider errors are propagated to `WorkflowService`.
+
+Responses with `status: incomplete` are treated as failures even if they contain partial text.
+
+Successful refusal content is treated as valid user-facing output, not as a provider failure.
+
+When the raw REST payload contains multiple `output_text` parts, the provider concatenates them in response order.
 
 `WorkflowService`:
 - logs the provider failure;
