@@ -27,6 +27,7 @@ describe('ToolRegistry', () => {
         inputSchema: { type: 'object' },
         risk: 'read',
       },
+      parseInput: (input) => input,
       execute: vi.fn(async (input) => input),
     };
 
@@ -45,6 +46,7 @@ describe('ToolRegistry', () => {
         inputSchema: { type: 'object' },
         risk: 'read',
       },
+      parseInput: (input) => input,
       execute: vi.fn(),
     };
 
@@ -72,6 +74,7 @@ describe('ToolExecutor', () => {
           inputSchema: { type: 'object' },
           risk: 'read',
         },
+        parseInput: (input) => input,
         execute,
       },
     ]);
@@ -95,6 +98,32 @@ describe('ToolExecutor', () => {
     );
   });
 
+  it('rejects invalid input before tool execution', async () => {
+    const execute = vi.fn();
+    const executor = new ToolExecutor(
+      new ToolRegistry([
+        {
+          definition: {
+            name: 'validated_tool',
+            description: 'Validates input',
+            inputSchema: { type: 'object' },
+            risk: 'read',
+          },
+          parseInput: () => {
+            throw new Error('invalid');
+          },
+          execute,
+        },
+      ]),
+      createLogger(),
+    );
+
+    await expect(
+      executor.execute({ name: 'validated_tool', input: null }, context),
+    ).rejects.toMatchObject({ kind: 'invalid_input', toolName: 'validated_tool' });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('blocks write tools until an explicit execution policy exists', async () => {
     const execute = vi.fn();
     const executor = new ToolExecutor(
@@ -106,6 +135,7 @@ describe('ToolExecutor', () => {
             inputSchema: { type: 'object' },
             risk: 'write',
           },
+          parseInput: (input) => input,
           execute,
         },
       ]),
@@ -132,6 +162,7 @@ describe('ToolExecutor', () => {
             inputSchema: { type: 'object' },
             risk: 'read',
           },
+          parseInput: (input) => input,
           execute: vi.fn(async () => {
             throw new Error('secret upstream details');
           }),
