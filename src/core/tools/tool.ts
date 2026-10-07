@@ -15,5 +15,6 @@ export interface ToolDefinition {
 
 export interface Tool<TInput = unknown, TOutput = unknown> {
   definition: ToolDefinition;
+  parseInput(input: unknown): TInput;
   execute(input: TInput, context: ToolContext): Promise<TOutput>;
 }
