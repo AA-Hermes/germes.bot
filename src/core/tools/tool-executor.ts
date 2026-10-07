@@ -34,10 +34,19 @@ export class ToolExecutor {
       );
     }
 
+    let input: unknown;
+    try {
+      input = tool.parseInput(call.input);
+    } catch (error) {
+      throw new ToolError('Invalid tool input', 'invalid_input', call.name, {
+        cause: error,
+      });
+    }
+
     const startedAt = performance.now();
 
     try {
-      const output = await tool.execute(call.input, context);
+      const output = await tool.execute(input, context);
 
       this.logger.info({
         event: 'TOOL_EXECUTION_COMPLETED',
