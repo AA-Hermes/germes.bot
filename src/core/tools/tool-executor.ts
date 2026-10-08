@@ -37,10 +37,8 @@ export class ToolExecutor {
     let input: unknown;
     try {
       input = tool.parseInput(call.input);
-    } catch (error) {
-      throw new ToolError('Invalid tool input', 'invalid_input', call.name, {
-        cause: error,
-      });
+    } catch {
+      throw new ToolError('Invalid tool input', 'invalid_input', call.name);
     }
 
     const startedAt = performance.now();
@@ -59,6 +57,8 @@ export class ToolExecutor {
 
       return { name: call.name, output };
     } catch (error) {
+      const kind = error instanceof ToolError ? error.kind : 'execution_failed';
+
       this.logger.error({
         event: 'TOOL_EXECUTION_ERROR',
         tool: call.name,
@@ -66,13 +66,11 @@ export class ToolExecutor {
         channel: context.channel,
         conversationId: context.conversationId,
         latencyMs: Math.round(performance.now() - startedAt),
-        err: error,
+        errorKind: kind,
       });
 
       if (error instanceof ToolError) throw error;
-      throw new ToolError('Tool execution failed', 'execution_failed', call.name, {
-        cause: error,
-      });
+      throw new ToolError('Tool execution failed', 'execution_failed', call.name);
     }
   }
 }
