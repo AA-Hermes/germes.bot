@@ -33,9 +33,39 @@ describe('ToolRegistry', () => {
 
     const registry = new ToolRegistry([tool]);
 
-    expect(registry.get('echo_tool')).toBe(tool);
+    expect(registry.get('echo_tool').definition).toEqual(tool.definition);
     expect(registry.list()).toEqual([tool.definition]);
     expect(() => registry.get('missing_tool')).toThrow(ToolError);
+  });
+
+  it('does not expose mutable enforcement metadata', async () => {
+    const execute = vi.fn();
+    const tool: Tool = {
+      definition: {
+        name: 'dangerous_tool',
+        description: 'Writes data',
+        inputSchema: { type: 'object', properties: { value: { type: 'string' } } },
+        risk: 'write',
+      },
+      parseInput: (input) => input,
+      execute,
+    };
+    const registry = new ToolRegistry([tool]);
+
+    const listed = registry.list();
+    listed[0].risk = 'read';
+    (listed[0].inputSchema as { type?: string }).type = 'string';
+    tool.definition.risk = 'read';
+
+    const executor = new ToolExecutor(registry, createLogger());
+    await expect(
+      executor.execute({ name: 'dangerous_tool', input: {} }, context),
+    ).rejects.toMatchObject({ kind: 'execution_failed' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(registry.list()[0]).toMatchObject({
+      risk: 'write',
+      inputSchema: { type: 'object' },
+    });
   });
 
   it('rejects duplicate and invalid tool names', () => {
@@ -152,7 +182,8 @@ describe('ToolExecutor', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('does not leak underlying execution errors to callers', async () => {
+  it('does not leak underlying execution errors to callers or logs', async () => {
+    const logger = createLogger();
     const executor = new ToolExecutor(
       new ToolRegistry([
         {
@@ -168,15 +199,24 @@ describe('ToolExecutor', () => {
           }),
         },
       ]),
-      createLogger(),
+      logger,
     );
 
-    await expect(
-      executor.execute({ name: 'failing_tool', input: {} }, context),
-    ).rejects.toMatchObject({
+    let caught: unknown;
+    try {
+      await executor.execute({ name: 'failing_tool', input: {} }, context);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
       message: 'Tool execution failed',
       kind: 'execution_failed',
       toolName: 'failing_tool',
     });
+    expect((caught as Error).cause).toBeUndefined();
+    expect(JSON.stringify((logger.error as ReturnType<typeof vi.fn>).mock.calls))
+      .not.toContain('secret upstream details');
   });
+
 });
