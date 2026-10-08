@@ -5,9 +5,8 @@ export class ToolError extends Error {
     message: string,
     readonly kind: ToolErrorKind,
     readonly toolName?: string,
-    options?: ErrorOptions,
   ) {
-    super(message, options);
+    super(message);
     this.name = 'ToolError';
   }
 }
