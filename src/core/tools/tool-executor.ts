@@ -69,7 +69,9 @@ export class ToolExecutor {
         errorKind: kind,
       });
 
-      if (error instanceof ToolError) throw error;
+      if (error instanceof ToolError) {
+        throw new ToolError('Tool execution failed', error.kind, call.name);
+      }
       throw new ToolError('Tool execution failed', 'execution_failed', call.name);
     }
   }
