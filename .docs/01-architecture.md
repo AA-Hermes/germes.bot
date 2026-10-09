@@ -67,6 +67,32 @@ Current implementations:
 
 Provider failures return a safe fallback reply and are logged with latency metadata.
 
+### Tool layer
+
+The channel-independent tool layer lives under `src/core/tools/`. It is the only application-core boundary for exposing controlled business capabilities to LLM/workflow orchestration.
+
+```text
+Workflow / LLM orchestration
+  -> ToolRegistry
+    -> ToolExecutor
+      -> Tool
+        -> application/integration service
+          -> external transport
+```
+
+Responsibilities:
+- `Tool` declares a stable name, description, input schema, risk (`read` or `write`), input parser, and execution function;
+- `ToolContext` carries channel-independent request context such as channel, conversation ID, and user ID;
+- `ToolRegistry` is the allowlist. It stores private snapshots of enforcement metadata and returns copies so callers cannot mutate a tool from `write` to `read`;
+- `ToolExecutor` validates/parses input before execution, enforces the current risk policy, and emits metadata-only execution logs;
+- `ToolError` exposes only normalized error kind, tool name, and safe message. Raw upstream exceptions, response bodies, credentials, tool inputs, and tool outputs must not cross this boundary or be logged.
+
+Write tools are intentionally blocked until an explicit authorization/confirmation policy is implemented. Do not bypass this by calling a write tool's `execute()` directly from Workflow, an LLM provider, or a channel adapter.
+
+Integration-specific tools belong in their integration module and should delegate to application services rather than exposing arbitrary transport calls. In particular, do not expose a generic `bitrix_rest_call(method, params)` tool to the model. Bitrix24 CRM tools should be explicit allowlisted operations such as search/get actions.
+
+The current PR establishes the tool infrastructure only. Native LLM tool-call orchestration and concrete Bitrix24 CRM tools are separate steps; `WorkflowService` still calls `LLMProvider` directly today.
+
 Future conversation history should be introduced behind a dedicated `ConversationStorage` abstraction:
 
 ```text
