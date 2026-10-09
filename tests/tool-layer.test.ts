@@ -91,6 +91,41 @@ describe('ToolRegistry', () => {
         }),
     ).toThrow('Invalid tool name');
   });
+  it('sanitizes ToolError messages thrown by concrete tools', async () => {
+    const logger = createLogger();
+    const executor = new ToolExecutor(
+      new ToolRegistry([
+        {
+          definition: {
+            name: 'wrapped_failure_tool',
+            description: 'Wraps an upstream failure',
+            inputSchema: { type: 'object' },
+            risk: 'read',
+          },
+          parseInput: (input) => input,
+          execute: vi.fn(async () => {
+            throw new ToolError(
+              'upstream response contains secret-token',
+              'execution_failed',
+              'wrapped_failure_tool',
+            );
+          }),
+        },
+      ]),
+      logger,
+    );
+
+    await expect(
+      executor.execute({ name: 'wrapped_failure_tool', input: {} }, context),
+    ).rejects.toMatchObject({
+      message: 'Tool execution failed',
+      kind: 'execution_failed',
+      toolName: 'wrapped_failure_tool',
+    });
+    expect(JSON.stringify((logger.error as ReturnType<typeof vi.fn>).mock.calls))
+      .not.toContain('secret-token');
+  });
+
 });
 
 describe('ToolExecutor', () => {
