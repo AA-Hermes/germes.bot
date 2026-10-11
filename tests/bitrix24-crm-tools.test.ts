@@ -49,6 +49,18 @@ describe('Bitrix24 CRM read tools', () => {
     );
   });
 
+  it('searches contacts by first name or surname', async () => {
+    const call = vi.fn(async () => ({ items: [{ id: 23, name: 'John', lastName: 'Smith' }] }));
+    const service = new Bitrix24CrmService({ call } as unknown as Bitrix24RestClient);
+    await expect(service.searchContacts('Smith', 10)).resolves.toEqual([
+      { id: 23, name: 'John', lastName: 'Smith' },
+    ]);
+    expect(call).toHaveBeenCalledWith('crm.item.list', expect.objectContaining({
+      entityTypeId: 3,
+      filter: { LOGIC: 'OR', '%name': 'Smith', '%lastName': 'Smith' },
+    }));
+  });
+
   it('validates search input before any Bitrix24 request', async () => {
     const call = vi.fn();
     const service = new Bitrix24CrmService({ call } as unknown as Bitrix24RestClient);
