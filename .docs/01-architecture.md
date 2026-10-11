@@ -91,7 +91,7 @@ Write tools are intentionally blocked until an explicit authorization/confirmati
 
 Integration-specific tools belong in their integration module and should delegate to application services rather than exposing arbitrary transport calls. In particular, do not expose a generic `bitrix_rest_call(method, params)` tool to the model. Bitrix24 CRM tools should be explicit allowlisted operations such as search/get actions.
 
-The current PR establishes the tool infrastructure only. Native LLM tool-call orchestration and concrete Bitrix24 CRM tools are separate steps; `WorkflowService` still calls `LLMProvider` directly today.
+Concrete Bitrix24 read tools now exist in `src/modules/bitrix24/tools/`: `crm_search_deals`, `crm_search_contacts`, and `crm_search_leads`. They delegate to `Bitrix24CrmService`, validate bounded inputs, and return allowlisted CRM fields. Contact search matches first name or surname. These tools are not yet wired to the LLM: native tool-call orchestration remains a separate step; `WorkflowService` still calls `LLMProvider` directly.
 
 Future conversation history should be introduced behind a dedicated `ConversationStorage` abstraction:
 
