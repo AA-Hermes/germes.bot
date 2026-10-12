@@ -48,7 +48,7 @@ export class Bitrix24CrmService {
   async searchContacts(query: string, limit: number): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 3,
-      filter: { LOGIC: 'OR', '%name': query, '%lastName': query },
+      filter: { logic: 'OR', '%name': query, '%lastName': query },
       select: ['id', 'name', 'lastName', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
