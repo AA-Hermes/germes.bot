@@ -57,7 +57,7 @@ describe('Bitrix24 CRM read tools', () => {
     ]);
     expect(call).toHaveBeenCalledWith('crm.item.list', expect.objectContaining({
       entityTypeId: 3,
-      filter: { LOGIC: 'OR', '%name': 'Smith', '%lastName': 'Smith' },
+      filter: { logic: 'OR', '%name': 'Smith', '%lastName': 'Smith' },
     }));
   });
 
