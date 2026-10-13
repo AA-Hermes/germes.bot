@@ -126,8 +126,9 @@ export class OpenAIProvider implements LLMProvider {
 
       const available = this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? [];
       if (available.length) requestBody.tools = available.map((tool) => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }));
-      let totalInputTokens = 0;
-      let totalOutputTokens = 0;
+      let totalInputTokens: number | undefined;
+      let totalOutputTokens: number | undefined;
+      let toolCallsUsed = 0;
       for (let turn = 0; turn < 4; turn++) {
       const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
@@ -161,18 +162,20 @@ export class OpenAIProvider implements LLMProvider {
         throw new Error(`OpenAI Responses API returned incomplete output: ${reason}`);
       }
 
-      totalInputTokens += payload.usage?.input_tokens ?? 0;
-      totalOutputTokens += payload.usage?.output_tokens ?? 0;
+      if (typeof payload.usage?.input_tokens === 'number') totalInputTokens = (totalInputTokens ?? 0) + payload.usage.input_tokens;
+      if (typeof payload.usage?.output_tokens === 'number') totalOutputTokens = (totalOutputTokens ?? 0) + payload.usage.output_tokens;
       const calls = (payload.output ?? []).filter((item) => item.type === 'function_call');
       if (calls.length) {
         if (!this.toolExecutor || turn === 3) throw new Error('OpenAI tool execution unavailable');
+        if (toolCallsUsed + calls.length > 6) throw new Error('OpenAI tool call budget exceeded');
+        toolCallsUsed += calls.length;
         const outputs = [];
         for (const call of calls) {
           if (!call.call_id || !call.name || !call.arguments) throw new Error('Invalid function call');
           let input: unknown;
           try { input = JSON.parse(call.arguments); } catch { input = null; }
           let output: unknown;
-          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: 'bitrix24', conversationId: inputConversationId, userId: inputUserId })).output; }
+          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: input.channel ?? 'unknown', conversationId: inputConversationId, userId: inputUserId })).output; }
           catch { output = { error: 'Tool execution failed' }; }
           outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) });
         }
