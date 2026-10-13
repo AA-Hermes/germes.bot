@@ -1,5 +1,6 @@
 export interface LLMGenerateInput {
   message: string;
+  channel?: string;
   conversationId: string;
   userId?: string;
 }
