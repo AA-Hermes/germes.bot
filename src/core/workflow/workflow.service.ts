@@ -46,6 +46,7 @@ export class WorkflowService {
     try {
       const result = await this.llmProvider.generateReply({
         message: message.text,
+        channel: message.channel,
         conversationId: message.conversationId,
         userId: message.userId,
       });
