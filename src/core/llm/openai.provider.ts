@@ -126,8 +126,10 @@ export class OpenAIProvider implements LLMProvider {
 
       const available = this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? [];
       if (available.length) requestBody.tools = available.map((tool) => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }));
-      let totalInputTokens: number | undefined;
-      let totalOutputTokens: number | undefined;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      let inputUsageComplete = true;
+      let outputUsageComplete = true;
       let toolCallsUsed = 0;
       for (let turn = 0; turn < 4; turn++) {
       const response = await fetch('https://api.openai.com/v1/responses', {
@@ -162,8 +164,10 @@ export class OpenAIProvider implements LLMProvider {
         throw new Error(`OpenAI Responses API returned incomplete output: ${reason}`);
       }
 
-      if (typeof payload.usage?.input_tokens === 'number') totalInputTokens = (totalInputTokens ?? 0) + payload.usage.input_tokens;
-      if (typeof payload.usage?.output_tokens === 'number') totalOutputTokens = (totalOutputTokens ?? 0) + payload.usage.output_tokens;
+      if (typeof payload.usage?.input_tokens === 'number') totalInputTokens += payload.usage.input_tokens;
+      else inputUsageComplete = false;
+      if (typeof payload.usage?.output_tokens === 'number') totalOutputTokens += payload.usage.output_tokens;
+      else outputUsageComplete = false;
       const calls = (payload.output ?? []).filter((item) => item.type === 'function_call');
       if (calls.length) {
         if (!this.toolExecutor || turn === 3) throw new Error('OpenAI tool execution unavailable');
@@ -192,8 +196,8 @@ export class OpenAIProvider implements LLMProvider {
         text,
         provider: 'openai',
         model: payload.model || this.model,
-        inputTokens: totalInputTokens,
-        outputTokens: totalOutputTokens,
+        inputTokens: inputUsageComplete ? totalInputTokens : undefined,
+        outputTokens: outputUsageComplete ? totalOutputTokens : undefined,
       };
       }
       throw new Error('OpenAI tool iteration limit exceeded');
