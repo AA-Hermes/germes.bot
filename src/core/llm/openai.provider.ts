@@ -1,4 +1,5 @@
 import { LLMProviderError, type LLMProviderErrorKind } from './llm-provider-error.js';
+import type { ToolExecutor } from '../tools/tool-executor.js';
 import type {
   LLMGenerateInput,
   LLMGenerateResult,
@@ -14,6 +15,9 @@ interface OpenAIResponseContent {
 interface OpenAIResponseOutput {
   type?: string;
   content?: OpenAIResponseContent[];
+  name?: string;
+  call_id?: string;
+  arguments?: string;
 }
 
 interface OpenAIResponsePayload {
@@ -91,9 +95,12 @@ export class OpenAIProvider implements LLMProvider {
     private readonly timeoutMs: number,
     private readonly maxOutputTokens: number,
     private readonly reasoningEffort: ReasoningEffort | null = null,
+    private readonly toolExecutor?: ToolExecutor,
   ) {}
 
   async generateReply(input: LLMGenerateInput): Promise<LLMGenerateResult> {
+    const inputConversationId = input.conversationId;
+    const inputUserId = input.userId;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -117,6 +124,11 @@ export class OpenAIProvider implements LLMProvider {
         };
       }
 
+      const available = this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? [];
+      if (available.length) requestBody.tools = available.map((tool) => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }));
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      for (let turn = 0; turn < 4; turn++) {
       const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
@@ -149,6 +161,24 @@ export class OpenAIProvider implements LLMProvider {
         throw new Error(`OpenAI Responses API returned incomplete output: ${reason}`);
       }
 
+      totalInputTokens += payload.usage?.input_tokens ?? 0;
+      totalOutputTokens += payload.usage?.output_tokens ?? 0;
+      const calls = (payload.output ?? []).filter((item) => item.type === 'function_call');
+      if (calls.length) {
+        if (!this.toolExecutor || turn === 3) throw new Error('OpenAI tool execution unavailable');
+        const outputs = [];
+        for (const call of calls) {
+          if (!call.call_id || !call.name || !call.arguments) throw new Error('Invalid function call');
+          let input: unknown;
+          try { input = JSON.parse(call.arguments); } catch { input = null; }
+          let output: unknown;
+          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: 'bitrix24', conversationId: inputConversationId, userId: inputUserId })).output; }
+          catch { output = { error: 'Tool execution failed' }; }
+          outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) });
+        }
+        requestBody.input = [...(requestBody.input as unknown[]), ...(payload.output ?? []), ...outputs];
+        continue;
+      }
       const text = this.extractText(payload);
 
       if (!text) {
@@ -159,9 +189,11 @@ export class OpenAIProvider implements LLMProvider {
         text,
         provider: 'openai',
         model: payload.model || this.model,
-        inputTokens: payload.usage?.input_tokens,
-        outputTokens: payload.usage?.output_tokens,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
       };
+      }
+      throw new Error('OpenAI tool iteration limit exceeded');
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new LLMProviderError(
