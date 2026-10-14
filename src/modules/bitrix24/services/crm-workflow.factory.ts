@@ -11,8 +11,8 @@ import { createBitrix24CrmReadTools } from '../tools/index.js';
 /**
  * Shared workflow composition for the webhook handler and queue recovery worker.
  * CRM access is disabled unless a verified Bitrix24 user ID is allowlisted.
- * A numeric dialogId matching the author ID is required for a direct conversation;
- * chat-prefixed group dialogs are never authorized. Unknown dialog formats fail closed.
+ * Only explicitly identified private chats are authorized; missing or group
+ * chat types fail closed, including events recovered from the queue.
  */
 export function canUseBitrix24CrmTools(input: LLMGenerateInput, allowedUserIds: ReadonlySet<string>): boolean {
   return input.channel === 'bitrix24' &&
