@@ -103,6 +103,7 @@ export class OpenAIProvider implements LLMProvider {
     const inputConversationId = input.conversationId;
     const inputUserId = input.userId;
     const inputChannel = input.channel ?? 'unknown';
+    const inputPortalDomain = input.portalDomain;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -186,7 +187,7 @@ export class OpenAIProvider implements LLMProvider {
           let input: unknown;
           try { input = JSON.parse(call.arguments); } catch { input = null; }
           let output: unknown;
-          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: inputChannel, conversationId: inputConversationId, userId: inputUserId })).output; }
+          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: inputChannel, conversationId: inputConversationId, userId: inputUserId, portalDomain: inputPortalDomain })).output; }
           catch { 
             if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
             output = { error: 'Tool execution failed' };
