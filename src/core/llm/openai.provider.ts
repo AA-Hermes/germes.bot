@@ -109,6 +109,7 @@ export class OpenAIProvider implements LLMProvider {
     try {
       const requestBody: Record<string, unknown> = {
         model: this.model,
+        store: false,
         instructions:
           'You are Hermes AI, a concise business assistant. Reply in the language used by the user unless they ask for another language.',
         input: [
