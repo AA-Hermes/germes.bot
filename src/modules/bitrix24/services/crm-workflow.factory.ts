@@ -6,6 +6,7 @@ import { ToolRegistry } from '../../../core/tools/tool-registry.js';
 import { WorkflowService } from '../../../core/workflow/workflow.service.js';
 import { Bitrix24CrmService } from './crm.service.js';
 import type { Bitrix24RestClient } from './rest-client.service.js';
+import type { IntegrationStorage } from '../../../storage/integration-storage.js';
 import { createBitrix24CrmReadTools } from '../tools/index.js';
 
 /**
@@ -14,13 +15,14 @@ import { createBitrix24CrmReadTools } from '../tools/index.js';
  * Only explicitly identified private chats are authorized; missing or group
  * chat types fail closed, including events recovered from the queue.
  */
-export function canUseBitrix24CrmTools(input: LLMGenerateInput, allowedUserIds: ReadonlySet<string>): boolean {
+export function canUseBitrix24CrmTools(input: LLMGenerateInput, allowedUserIds: ReadonlySet<string>, currentPortalDomain?: string): boolean {
   return input.channel === 'bitrix24' &&
     input.chatType === 'private' &&
+    Boolean(input.portalDomain && currentPortalDomain && input.portalDomain === currentPortalDomain) &&
     Boolean(input.userId && allowedUserIds.has(input.userId));
 }
 
-export function createBitrix24Workflow(client: Bitrix24RestClient, logger: FastifyBaseLogger): WorkflowService {
+export function createBitrix24Workflow(client: Bitrix24RestClient, logger: FastifyBaseLogger, storage: IntegrationStorage): WorkflowService {
   const allowedUserIds = new Set(
     (process.env.BITRIX24_CRM_TOOL_ALLOWED_USER_IDS ?? '')
       .split(',')
@@ -32,7 +34,10 @@ export function createBitrix24Workflow(client: Bitrix24RestClient, logger: Fasti
     logger,
   );
   return new WorkflowService(
-    createLLMProvider(executor, (input) => canUseBitrix24CrmTools(input, allowedUserIds)),
+    createLLMProvider(executor, async (input) => {
+      const installation = await storage.getBitrix24Installation();
+      return canUseBitrix24CrmTools(input, allowedUserIds, installation?.domain);
+    }),
     logger,
   );
 }
