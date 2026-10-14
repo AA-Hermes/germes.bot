@@ -96,7 +96,7 @@ export class OpenAIProvider implements LLMProvider {
     private readonly maxOutputTokens: number,
     private readonly reasoningEffort: ReasoningEffort | null = null,
     private readonly toolExecutor?: ToolExecutor,
-    private readonly canUseTools: (input: LLMGenerateInput) => boolean = () => true,
+    private readonly canUseTools: (input: LLMGenerateInput) => boolean | Promise<boolean> = () => true,
   ) {}
 
   async generateReply(input: LLMGenerateInput): Promise<LLMGenerateResult> {
@@ -127,7 +127,7 @@ export class OpenAIProvider implements LLMProvider {
         };
       }
 
-      const available = this.canUseTools(input)
+      const available = await this.canUseTools(input)
         ? this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? []
         : [];
       if (available.length) requestBody.tools = available.map((tool) => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }));
