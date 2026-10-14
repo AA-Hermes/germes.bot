@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ToolContext } from '../../../core/tools/tool.js';
 import type { Tool } from '../../../core/tools/index.js';
 import type { Bitrix24CrmService, CrmEntitySummary } from '../services/crm.service.js';
 
@@ -22,7 +23,7 @@ const inputSchema = {
 function createSearchTool(
   name: string,
   description: string,
-  search: (input: SearchInput) => Promise<CrmEntitySummary[]>,
+  search: (input: SearchInput, context: ToolContext) => Promise<CrmEntitySummary[]>,
 ): Tool<SearchInput, CrmEntitySummary[]> {
   return {
     definition: { name, description, inputSchema, risk: 'read' },
@@ -36,17 +37,17 @@ export function createBitrix24CrmReadTools(service: Bitrix24CrmService): Tool[] 
     createSearchTool(
       'crm_search_deals',
       'Search Bitrix24 CRM deals by title.',
-      ({ query, limit }) => service.searchDeals(query, limit),
+      ({ query, limit }, context) => service.searchDeals(query, limit, context.portalDomain),
     ),
     createSearchTool(
       'crm_search_contacts',
       'Search Bitrix24 CRM contacts by name.',
-      ({ query, limit }) => service.searchContacts(query, limit),
+      ({ query, limit }, context) => service.searchContacts(query, limit, context.portalDomain),
     ),
     createSearchTool(
       'crm_search_leads',
       'Search Bitrix24 CRM leads by title.',
-      ({ query, limit }) => service.searchLeads(query, limit),
+      ({ query, limit }, context) => service.searchLeads(query, limit, context.portalDomain),
     ),
   ];
 }
