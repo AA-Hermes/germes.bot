@@ -1,5 +1,6 @@
 export interface QueuedEventInput {
   channel: string;
+  chatType?: string;
   externalId: string;
   conversationId: string;
   userId?: string;
