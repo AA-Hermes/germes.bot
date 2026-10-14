@@ -73,8 +73,8 @@ export class Bitrix24RestClient {
     }
   }
 
-  async call<T>(method: string, params: Record<string, unknown>): Promise<T> {
-    const prepared = await this.prepareCall();
+  async call<T>(method: string, params: Record<string, unknown>, expectedPortalDomain?: string): Promise<T> {
+    const prepared = await this.prepareCall(expectedPortalDomain);
     return this.callPrepared<T>(prepared, method, params);
   }
 
