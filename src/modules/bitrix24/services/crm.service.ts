@@ -71,11 +71,9 @@ export class Bitrix24CrmService {
     limit: number,
     portalDomain?: string,
   ): Promise<CrmEntitySummary[]> {
-    const result = await this.client.call<BitrixListResult<Record<string, unknown>>>(
-      method,
-      params,
-      portalDomain,
-    );
+    const result = portalDomain
+      ? await this.client.call<BitrixListResult<Record<string, unknown>>>(method, params, portalDomain)
+      : await this.client.call<BitrixListResult<Record<string, unknown>>>(method, params);
 
     return result.items
       .map(normalizeEntity)
