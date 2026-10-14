@@ -27,12 +27,16 @@ export class Bitrix24RestClient {
     private readonly timeoutMs = 10_000,
   ) {}
 
-  async prepareCall(): Promise<{ clientEndpoint: string; accessToken: string }> {
+  async prepareCall(expectedPortalDomain?: string): Promise<{ clientEndpoint: string; accessToken: string }> {
     const tokens = await this.storage.getTokens();
     const installation = await this.storage.getBitrix24Installation();
 
     if (!tokens?.accessToken || !installation?.clientEndpoint) {
       throw new Bitrix24RestError('Bitrix24 application is not installed');
+    }
+
+    if (expectedPortalDomain && installation.domain !== expectedPortalDomain) {
+      throw new Bitrix24RestError('Bitrix24 portal does not match event origin');
     }
 
     return {
