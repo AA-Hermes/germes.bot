@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import type { LLMGenerateInput } from '../../../core/llm/llm-provider.js';
 import { createLLMProvider } from '../../../core/llm/index.js';
 import { ToolExecutor } from '../../../core/tools/tool-executor.js';
 import { ToolRegistry } from '../../../core/tools/tool-registry.js';
@@ -13,6 +14,12 @@ import { createBitrix24CrmReadTools } from '../tools/index.js';
  * A numeric dialogId matching the author ID is required for a direct conversation;
  * chat-prefixed group dialogs are never authorized. Unknown dialog formats fail closed.
  */
+export function canUseBitrix24CrmTools(input: LLMGenerateInput, allowedUserIds: ReadonlySet<string>): boolean {
+  return input.channel === 'bitrix24' &&
+    input.chatType === 'private' &&
+    Boolean(input.userId && allowedUserIds.has(input.userId));
+}
+
 export function createBitrix24Workflow(client: Bitrix24RestClient, logger: FastifyBaseLogger): WorkflowService {
   const allowedUserIds = new Set(
     (process.env.BITRIX24_CRM_TOOL_ALLOWED_USER_IDS ?? '')
@@ -25,11 +32,7 @@ export function createBitrix24Workflow(client: Bitrix24RestClient, logger: Fasti
     logger,
   );
   return new WorkflowService(
-    createLLMProvider(executor, (input) =>
-      input.channel === 'bitrix24' &&
-      input.chatType === 'private' &&
-      Boolean(input.userId && allowedUserIds.has(input.userId)),
-    ),
+    createLLMProvider(executor, (input) => canUseBitrix24CrmTools(input, allowedUserIds)),
     logger,
   );
 }
