@@ -25,6 +25,7 @@ export function createBitrix24Workflow(client: Bitrix24RestClient, logger: Fasti
   return new WorkflowService(
     createLLMProvider(executor, (input) =>
       input.channel === 'bitrix24' &&
+      input.chatType === 'private' &&
       Boolean(input.userId && allowedUserIds.has(input.userId)),
     ),
     logger,
