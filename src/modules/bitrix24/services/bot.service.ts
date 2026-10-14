@@ -61,6 +61,7 @@ export class BotService {
   async prepareMessage(
     dialogId: string | number,
     message: string,
+    expectedPortalDomain?: string,
   ): Promise<{
     preparedCall: Awaited<ReturnType<Bitrix24RestClient['prepareCall']>>;
     params: Record<string, unknown>;
@@ -69,7 +70,7 @@ export class BotService {
     if (!botId) throw new Error('Hermes AI bot is not registered');
 
     return {
-      preparedCall: await this.client.prepareCall(),
+      preparedCall: await this.client.prepareCall(expectedPortalDomain),
       params: {
         botId,
         dialogId: String(dialogId),
