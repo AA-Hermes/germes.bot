@@ -45,17 +45,17 @@ export class Bitrix24CrmService {
     }, limit, portalDomain);
   }
 
-  async searchContacts(query: string, limit: number): Promise<CrmEntitySummary[]> {
+  async searchContacts(query: string, limit: number, portalDomain?: string): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 3,
       filter: { logic: 'OR', '%name': query, '%lastName': query },
       select: ['id', 'name', 'lastName', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
-    }, limit);
+    }, limit, portalDomain);
   }
 
-  async searchLeads(query: string, limit: number): Promise<CrmEntitySummary[]> {
+  async searchLeads(query: string, limit: number, portalDomain?: string): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 1,
       filter: { '%title': query },
