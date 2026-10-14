@@ -35,7 +35,7 @@ export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
   // An empty allowlist disables tool exposure to all users.
   const allowedUserIds = new Set(
     (process.env.BITRIX24_CRM_TOOL_ALLOWED_USER_IDS ?? '')
-      .split(',').map((id) => id.trim()).filter((id) => /^\\d+$/.test(id)),
+      .split(',').map((id) => id.trim()).filter((id) => /^\d+$/.test(id)),
   );
   const toolExecutor = new ToolExecutor(
     new ToolRegistry(createBitrix24CrmReadTools(new Bitrix24CrmService(client))),
