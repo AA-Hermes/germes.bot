@@ -5,6 +5,7 @@ interface QueueRow {
   id: number | string;
   channel: string;
   chat_type: string | null;
+  portal_domain: string | null;
   external_id: string;
   conversation_id: string;
   user_id: string | null;
@@ -30,6 +31,7 @@ export class PostgresEventQueue implements EventQueue {
         id bigserial PRIMARY KEY,
         channel text NOT NULL,
         chat_type text,
+        portal_domain text,
         external_id text NOT NULL,
         conversation_id text NOT NULL,
         user_id text,
@@ -50,6 +52,11 @@ export class PostgresEventQueue implements EventQueue {
     await this.sql`
       ALTER TABLE incoming_event_queue
       ADD COLUMN IF NOT EXISTS chat_type text
+    `;
+
+    await this.sql`
+      ALTER TABLE incoming_event_queue
+      ADD COLUMN IF NOT EXISTS portal_domain text
     `;
 
     await this.sql`
@@ -77,6 +84,7 @@ export class PostgresEventQueue implements EventQueue {
       INSERT INTO incoming_event_queue (
         channel,
         chat_type,
+        portal_domain,
         external_id,
         conversation_id,
         user_id,
@@ -85,6 +93,7 @@ export class PostgresEventQueue implements EventQueue {
       VALUES (
         ${event.channel},
         ${event.chatType ?? null},
+        ${event.portalDomain ?? null},
         ${event.externalId},
         ${event.conversationId},
         ${event.userId ?? null},
@@ -130,6 +139,7 @@ export class PostgresEventQueue implements EventQueue {
         queue.id,
         queue.channel,
         queue.chat_type,
+        queue.portal_domain,
         queue.external_id,
         queue.conversation_id,
         queue.user_id,
@@ -141,6 +151,7 @@ export class PostgresEventQueue implements EventQueue {
       id: Number(row.id),
       channel: row.channel,
       chatType: row.chat_type ?? undefined,
+      portalDomain: row.portal_domain ?? undefined,
       externalId: row.external_id,
       conversationId: row.conversation_id,
       userId: row.user_id ?? undefined,
