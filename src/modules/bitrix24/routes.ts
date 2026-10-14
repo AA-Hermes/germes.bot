@@ -3,6 +3,10 @@ import { waitUntil } from '@vercel/functions';
 import { config } from '../../config/index.js';
 import { createLLMProvider } from '../../core/llm/index.js';
 import { WorkflowService } from '../../core/workflow/workflow.service.js';
+import { ToolExecutor } from '../../core/tools/tool-executor.js';
+import { ToolRegistry } from '../../core/tools/tool-registry.js';
+import { Bitrix24CrmService } from './services/crm.service.js';
+import { createBitrix24CrmReadTools } from './tools/index.js';
 import { PostgresEventQueue } from '../../queue/postgres-event-queue.js';
 import { getIntegrationStorage } from '../../storage/index.js';
 import { BotController } from './controllers/bot.controller.js';
@@ -27,7 +31,22 @@ export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
     app.log,
     `${config.appUrl}/api/bitrix24/webhook`,
   );
-  const workflowService = new WorkflowService(createLLMProvider(), app.log);
+  // CRM access is opt-in for explicitly allowlisted Bitrix24 user IDs only.
+  // An empty allowlist disables tool exposure to all users.
+  const allowedUserIds = new Set(
+    (process.env.BITRIX24_CRM_TOOL_ALLOWED_USER_IDS ?? '')
+      .split(',').map((id) => id.trim()).filter((id) => /^\\d+$/.test(id)),
+  );
+  const toolExecutor = new ToolExecutor(
+    new ToolRegistry(createBitrix24CrmReadTools(new Bitrix24CrmService(client))),
+    app.log,
+  );
+  const workflowService = new WorkflowService(
+    createLLMProvider(toolExecutor, (input) =>
+      input.channel === 'bitrix24' && Boolean(input.userId && allowedUserIds.has(input.userId)),
+    ),
+    app.log,
+  );
 
   const eventQueue = config.databaseUrl
     ? new PostgresEventQueue(config.databaseUrl)
