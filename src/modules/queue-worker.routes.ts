@@ -31,7 +31,7 @@ export async function queueWorkerRoutes(app: FastifyInstance): Promise<void> {
     app.log,
     `${config.appUrl}/api/bitrix24/webhook`,
   );
-  const workflowService = createBitrix24Workflow(client, app.log);
+  const workflowService = createBitrix24Workflow(client, app.log, storage);
   const queue = new PostgresEventQueue(config.databaseUrl);
   const processor = new QueuedEventProcessor(queue, workflowService, botService, app.log);
 
