@@ -41,6 +41,7 @@ export class QueuedEventProcessor {
         const preparedMessage = await this.botService.prepareMessage(
           event.conversationId,
           workflow.text,
+          event.portalDomain,
         );
 
         deliveryStarted = await this.queue.beginDelivery(event.id);
