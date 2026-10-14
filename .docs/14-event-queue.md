@@ -31,10 +31,11 @@ The queue stores only normalized message data:
 - external message ID;
 - conversation ID;
 - user ID;
+- Bitrix24 chat type (`chat_type`), used to restrict CRM tool access to verified private chats during retries and recovery;
 - message text;
 - processing state and retry metadata.
 
-Bitrix24 application tokens and raw webhook payloads are not copied into the queue.
+Bitrix24 application tokens and raw webhook payloads are not copied into the queue. Older rows without a known chat type cannot access CRM tools (fail closed).
 
 The unique key `(channel, external_id)` provides persistent duplicate-event protection.
 
