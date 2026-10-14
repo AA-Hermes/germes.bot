@@ -62,7 +62,7 @@ export class Bitrix24CrmService {
       select: ['id', 'title', 'stageId', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
-    }, limit);
+    }, limit, portalDomain);
   }
 
   private async list(
