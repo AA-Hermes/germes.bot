@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { WorkflowService } from '../../../core/workflow/workflow.service.js';
 import type { EventQueue } from '../../../queue/event-queue.js';
+import type { IntegrationStorage } from '../../../storage/integration-storage.js';
 import type { BotService } from './bot.service.js';
 
 export class QueuedEventProcessor {
@@ -9,6 +10,7 @@ export class QueuedEventProcessor {
     private readonly workflowService: WorkflowService,
     private readonly botService: BotService,
     private readonly logger: FastifyBaseLogger,
+    private readonly storage?: IntegrationStorage,
   ) {}
 
   async processAvailable(limit = 5): Promise<number> {
@@ -21,9 +23,16 @@ export class QueuedEventProcessor {
       let deliveryStarted = false;
 
       try {
+        if (this.storage) {
+          const installation = await this.storage.getBitrix24Installation();
+          if (!event.portalDomain || !installation || event.portalDomain !== installation.domain) {
+            throw new Error('Queue event portal does not match current installation');
+          }
+        }
         const workflow = await this.workflowService.handleMessage({
           channel: event.channel,
           chatType: event.chatType,
+          portalDomain: event.portalDomain,
           conversationId: event.conversationId,
           userId: event.userId,
           text: event.text,
