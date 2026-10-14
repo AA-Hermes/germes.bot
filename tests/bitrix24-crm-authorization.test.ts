@@ -3,10 +3,15 @@ import { canUseBitrix24CrmTools } from '../src/modules/bitrix24/services/crm-wor
 
 describe('Bitrix24 CRM tool authorization', () => {
   const allowed = new Set(['42']);
-  const base = { message: 'Find deals', channel: 'bitrix24', conversationId: '42', userId: '42' };
+  const base = { message: 'Find deals', channel: 'bitrix24', conversationId: '42', userId: '42', portalDomain: 'original.bitrix24.com' };
 
   it('permits allowlisted users in explicitly private chats', () => {
-    expect(canUseBitrix24CrmTools({ ...base, chatType: 'private' }, allowed)).toBe(true);
+    expect(canUseBitrix24CrmTools({ ...base, chatType: 'private' }, allowed, 'original.bitrix24.com')).toBe(true);
+  });
+
+  it('rejects events originating from another installation', () => {
+    expect(canUseBitrix24CrmTools({ ...base, chatType: 'private' }, allowed, 'new.bitrix24.com')).toBe(false);
+    expect(canUseBitrix24CrmTools({ ...base, chatType: 'private', portalDomain: undefined }, allowed, 'original.bitrix24.com')).toBe(false);
   });
 
   it('rejects group chats even for allowlisted users', () => {
@@ -14,7 +19,7 @@ describe('Bitrix24 CRM tool authorization', () => {
   });
 
   it('fails closed when chat type is absent, including legacy queue events', () => {
-    expect(canUseBitrix24CrmTools(base, allowed)).toBe(false);
+    expect(canUseBitrix24CrmTools(base, allowed, 'original.bitrix24.com')).toBe(false);
   });
 
   it('rejects unapproved users and other channels', () => {
