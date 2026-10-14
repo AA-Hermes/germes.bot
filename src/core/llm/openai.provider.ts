@@ -96,6 +96,7 @@ export class OpenAIProvider implements LLMProvider {
     private readonly maxOutputTokens: number,
     private readonly reasoningEffort: ReasoningEffort | null = null,
     private readonly toolExecutor?: ToolExecutor,
+    private readonly canUseTools: (input: LLMGenerateInput) => boolean = () => true,
   ) {}
 
   async generateReply(input: LLMGenerateInput): Promise<LLMGenerateResult> {
@@ -125,7 +126,9 @@ export class OpenAIProvider implements LLMProvider {
         };
       }
 
-      const available = this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? [];
+      const available = this.canUseTools(input)
+        ? this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? []
+        : [];
       if (available.length) requestBody.tools = available.map((tool) => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }));
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
@@ -171,7 +174,7 @@ export class OpenAIProvider implements LLMProvider {
       else outputUsageComplete = false;
       const calls = (payload.output ?? []).filter((item) => item.type === 'function_call');
       if (calls.length) {
-        if (!this.toolExecutor || turn === 3) throw new Error('OpenAI tool execution unavailable');
+        if (!this.toolExecutor || !available.length || turn === 3) throw new Error('OpenAI tool execution unavailable');
         if (toolCallsUsed + calls.length > 6) throw new Error('OpenAI tool call budget exceeded');
         toolCallsUsed += calls.length;
         const outputs = [];
