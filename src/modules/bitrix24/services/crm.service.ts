@@ -35,14 +35,14 @@ function normalizeEntity(value: Record<string, unknown>): CrmEntitySummary | nul
 export class Bitrix24CrmService {
   constructor(private readonly client: Bitrix24RestClient) {}
 
-  async searchDeals(query: string, limit: number): Promise<CrmEntitySummary[]> {
+  async searchDeals(query: string, limit: number, portalDomain?: string): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 2,
       filter: { '%title': query },
       select: ['id', 'title', 'stageId', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
-    }, limit);
+    }, limit, portalDomain);
   }
 
   async searchContacts(query: string, limit: number): Promise<CrmEntitySummary[]> {
@@ -69,10 +69,12 @@ export class Bitrix24CrmService {
     method: string,
     params: Record<string, unknown>,
     limit: number,
+    portalDomain?: string,
   ): Promise<CrmEntitySummary[]> {
     const result = await this.client.call<BitrixListResult<Record<string, unknown>>>(
       method,
       params,
+      portalDomain,
     );
 
     return result.items
