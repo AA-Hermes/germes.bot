@@ -4,6 +4,7 @@ import type { LLMProvider } from '../llm/llm-provider.js';
 
 export interface WorkflowMessage {
   channel: string;
+  chatType?: string;
   conversationId: string;
   userId?: string;
   text: string;
@@ -47,6 +48,7 @@ export class WorkflowService {
       const result = await this.llmProvider.generateReply({
         message: message.text,
         channel: message.channel,
+        chatType: message.chatType,
         conversationId: message.conversationId,
         userId: message.userId,
       });
