@@ -339,4 +339,27 @@ describe('OpenAIProvider', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+
+  it('does not start another tool call after the response deadline', async () => {
+    const execute = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return { name: 'crm_search_deals', output: [] };
+    });
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute,
+    } as unknown as ToolExecutor;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed',
+      output: [
+        { type: 'function_call', name: 'crm_search_deals', call_id: 'one', arguments: '{}' },
+        { type: 'function_call', name: 'crm_search_deals', call_id: 'two', arguments: '{}' },
+      ],
+    }), { status: 200 })));
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 10, 1200, null, executor);
+    await expect(provider.generateReply({ message: 'Search', channel: 'bitrix24', conversationId: 'c' }))
+      .rejects.toMatchObject({ kind: 'timeout' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
 });
