@@ -4,6 +4,7 @@ import type { EventQueue, QueuedEvent, QueuedEventInput } from './event-queue.js
 interface QueueRow {
   id: number | string;
   channel: string;
+  chat_type: string | null;
   external_id: string;
   conversation_id: string;
   user_id: string | null;
@@ -28,6 +29,7 @@ export class PostgresEventQueue implements EventQueue {
       CREATE TABLE IF NOT EXISTS incoming_event_queue (
         id bigserial PRIMARY KEY,
         channel text NOT NULL,
+        chat_type text,
         external_id text NOT NULL,
         conversation_id text NOT NULL,
         user_id text,
@@ -43,6 +45,11 @@ export class PostgresEventQueue implements EventQueue {
         updated_at timestamptz NOT NULL DEFAULT now(),
         UNIQUE (channel, external_id)
       )
+    `;
+
+    await this.sql`
+      ALTER TABLE incoming_event_queue
+      ADD COLUMN IF NOT EXISTS chat_type text
     `;
 
     await this.sql`
@@ -69,6 +76,7 @@ export class PostgresEventQueue implements EventQueue {
     const result = await this.sql`
       INSERT INTO incoming_event_queue (
         channel,
+        chat_type,
         external_id,
         conversation_id,
         user_id,
@@ -76,6 +84,7 @@ export class PostgresEventQueue implements EventQueue {
       )
       VALUES (
         ${event.channel},
+        ${event.chatType ?? null},
         ${event.externalId},
         ${event.conversationId},
         ${event.userId ?? null},
@@ -120,6 +129,7 @@ export class PostgresEventQueue implements EventQueue {
       RETURNING
         queue.id,
         queue.channel,
+        queue.chat_type,
         queue.external_id,
         queue.conversation_id,
         queue.user_id,
@@ -130,6 +140,7 @@ export class PostgresEventQueue implements EventQueue {
     return (result as unknown as QueueRow[]).map((row) => ({
       id: Number(row.id),
       channel: row.channel,
+      chatType: row.chat_type ?? undefined,
       externalId: row.external_id,
       conversationId: row.conversation_id,
       userId: row.user_id ?? undefined,
