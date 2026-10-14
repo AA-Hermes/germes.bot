@@ -99,3 +99,9 @@ Workflow logging may record token counts, provider, model, and latency, but neve
 The current provider sends only the current user message.
 
 Persistent history is the next separate concern and should be implemented behind `ConversationStorage`.
+
+## Native CRM read tools
+
+The Bitrix24 bot route composes `ToolExecutor` with three read-only CRM search tools and injects it into the OpenAI provider. Tool exposure is **disabled by default**: set `BITRIX24_CRM_TOOL_ALLOWED_USER_IDS` to a comma-separated list of trusted numeric Bitrix24 user IDs to opt in. The verified webhook must originate from the configured installation and the request channel must be `bitrix24`. Other users receive ordinary model replies without CRM tools. Do not allowlist untrusted users; read-only CRM access still reveals sensitive records. This allowlist is a temporary access policy for the single-portal deployment, not a replacement for granular Bitrix24 permissions or multi-tenant authorization.
+
+The provider permits at most six tool calls across four model turns. Tool errors are returned without internal details. The OpenAI request timeout does not cancel an already running Bitrix24 REST call (the REST client has its own timeout). Usage totals are reported only when every model turn provides the relevant token metric.
