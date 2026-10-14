@@ -5,7 +5,7 @@ import { OpenAIProvider } from './openai.provider.js';
 import type { ToolExecutor } from '../tools/tool-executor.js';
 import type { LLMGenerateInput } from './llm-provider.js';
 
-export function createLLMProvider(toolExecutor?: ToolExecutor, canUseTools?: (input: LLMGenerateInput) => boolean): LLMProvider {
+export function createLLMProvider(toolExecutor?: ToolExecutor, canUseTools?: (input: LLMGenerateInput) => boolean | Promise<boolean>): LLMProvider {
   if (!config.openai.apiKey) {
     return new EchoLLMProvider();
   }
