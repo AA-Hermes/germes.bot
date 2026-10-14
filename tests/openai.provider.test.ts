@@ -362,4 +362,21 @@ describe('OpenAIProvider', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+
+  it('disables Responses API storage when CRM tools are available', async () => {
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute: vi.fn(),
+    } as unknown as ToolExecutor;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed', output_text: 'Done',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor);
+    await provider.generateReply({ message: 'Search CRM', channel: 'bitrix24', conversationId: 'c', userId: '1' });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.store).toBe(false);
+    expect(request.tools).toHaveLength(1);
+  });
+
 });
