@@ -6,28 +6,7 @@ import type { ToolExecutor } from '../src/core/tools/tool-executor.js';
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
-  it('uses the workflow channel rather than model-authored tool arguments', async () => {
-    const execute = vi.fn().mockResolvedValue({ name: 'crm_search_deals', output: [] });
-    const executor = {
-      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
-      execute,
-    } as unknown as ToolExecutor;
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        status: 'completed',
-        output: [{ type: 'function_call', name: 'crm_search_deals', call_id: 'call_1', arguments: '{"channel":"attacker"}' }],
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        status: 'completed', output_text: 'Done',
-      }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor);
-    await provider.generateReply({ message: 'Find deals', channel: 'telegram', conversationId: 'chat-1', userId: 'u1' });
-    expect(execute).toHaveBeenCalledWith(
-      { name: 'crm_search_deals', input: { channel: 'attacker' } },
-      { channel: 'telegram', conversationId: 'chat-1', userId: 'u1' },
-    );
-  });
+
 
 });
 
@@ -319,4 +298,27 @@ describe('OpenAIProvider', () => {
       }),
     ).rejects.toThrow('OpenAI Responses API error (HTTP 400, code invalid_request_error)');
   });
+  it('uses the workflow channel rather than model-authored tool arguments', async () => {
+    const execute = vi.fn().mockResolvedValue({ name: 'crm_search_deals', output: [] });
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute,
+    } as unknown as ToolExecutor;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed',
+        output: [{ type: 'function_call', name: 'crm_search_deals', call_id: 'call_1', arguments: '{"channel":"attacker"}' }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed', output_text: 'Done',
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor);
+    await provider.generateReply({ message: 'Find deals', channel: 'telegram', conversationId: 'chat-1', userId: 'u1' });
+    expect(execute).toHaveBeenCalledWith(
+      { name: 'crm_search_deals', input: { channel: 'attacker' } },
+      { channel: 'telegram', conversationId: 'chat-1', userId: 'u1' },
+    );
+  });
+
 });
