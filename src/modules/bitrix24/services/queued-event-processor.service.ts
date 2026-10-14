@@ -23,6 +23,7 @@ export class QueuedEventProcessor {
       try {
         const workflow = await this.workflowService.handleMessage({
           channel: event.channel,
+          chatType: event.chatType,
           conversationId: event.conversationId,
           userId: event.userId,
           text: event.text,
