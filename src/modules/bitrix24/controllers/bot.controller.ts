@@ -125,6 +125,8 @@ export class BotController {
       const queued = await this.eventQueue.enqueue({
         channel: 'bitrix24',
         chatType: event.chatType,
+      portalDomain: event.domain ?? undefined,
+        portalDomain: event.domain ?? undefined,
         externalId: String(event.messageId),
         conversationId: event.dialogId,
         userId: String(event.authorId),
