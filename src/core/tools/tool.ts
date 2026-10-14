@@ -4,6 +4,7 @@ export interface ToolContext {
   channel: string;
   conversationId: string;
   userId?: string;
+  portalDomain?: string;
 }
 
 export interface ToolDefinition {
