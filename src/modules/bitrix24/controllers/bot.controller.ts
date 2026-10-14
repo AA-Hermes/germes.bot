@@ -124,6 +124,7 @@ export class BotController {
     if (this.eventQueue && this.queuedEventProcessor && this.scheduleBackground) {
       const queued = await this.eventQueue.enqueue({
         channel: 'bitrix24',
+        chatType: event.chatType,
         externalId: String(event.messageId),
         conversationId: event.dialogId,
         userId: String(event.authorId),
@@ -155,6 +156,7 @@ export class BotController {
 
     const workflow = await this.workflowService.handleMessage({
       channel: 'bitrix24',
+      chatType: event.chatType,
       conversationId: event.dialogId,
       userId: String(event.authorId),
       text: event.text,
