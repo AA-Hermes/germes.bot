@@ -164,7 +164,8 @@ export class BotController {
       text: event.text,
     });
 
-    await this.botService.sendMessage(event.dialogId, workflow.text);
+    const prepared = await this.botService.prepareMessage(event.dialogId, workflow.text, event.domain ?? undefined);
+    await this.botService.sendPreparedMessage(prepared);
 
     return reply.send({
       status: 'ok',
