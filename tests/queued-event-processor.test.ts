@@ -65,7 +65,7 @@ describe('QueuedEventProcessor', () => {
 
     expect(queue.claim).toHaveBeenCalledWith(1);
     expect(queue.beginDelivery).toHaveBeenCalledWith(42);
-    expect(botService.prepareMessage).toHaveBeenCalledWith('1', 'OPENAI');
+    expect(botService.prepareMessage).toHaveBeenCalledWith('1', 'OPENAI', undefined);
     expect(botService.sendPreparedMessage).toHaveBeenCalledWith(preparedMessage);
     expect(queue.markDelivered).toHaveBeenCalledWith(42, 670326);
     expect(queue.failDelivery).not.toHaveBeenCalled();
