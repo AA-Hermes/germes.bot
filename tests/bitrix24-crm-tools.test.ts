@@ -5,7 +5,7 @@ import { createBitrix24CrmReadTools } from '../src/modules/bitrix24/tools/index.
 import type { Bitrix24RestClient } from '../src/modules/bitrix24/services/rest-client.service.js';
 import type { FastifyBaseLogger } from 'fastify';
 
-const context = { channel: 'bitrix24', conversationId: 'chat5', userId: '42' };
+const context = { channel: 'bitrix24', conversationId: 'chat5', userId: '42', portalDomain: 'original.bitrix24.com' };
 
 function logger(): FastifyBaseLogger {
   return { info: vi.fn(), error: vi.fn() } as unknown as FastifyBaseLogger;
@@ -46,6 +46,7 @@ describe('Bitrix24 CRM read tools', () => {
         entityTypeId: 2,
         filter: { '%title': 'ACME' },
       }),
+      'original.bitrix24.com',
     );
   });
 
