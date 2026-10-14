@@ -33,7 +33,7 @@ export async function queueWorkerRoutes(app: FastifyInstance): Promise<void> {
   );
   const workflowService = createBitrix24Workflow(client, app.log, storage);
   const queue = new PostgresEventQueue(config.databaseUrl);
-  const processor = new QueuedEventProcessor(queue, workflowService, botService, app.log);
+  const processor = new QueuedEventProcessor(queue, workflowService, botService, app.log, storage);
 
   app.get('/queue/process', async (request, reply) => {
     if (!config.cronSecret) {
