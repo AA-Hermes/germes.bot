@@ -10,6 +10,8 @@ import { createBitrix24CrmReadTools } from '../tools/index.js';
 /**
  * Shared workflow composition for the webhook handler and queue recovery worker.
  * CRM access is disabled unless a verified Bitrix24 user ID is allowlisted.
+ * A numeric dialogId matching the author ID is required for a direct conversation;
+ * chat-prefixed group dialogs are never authorized. Unknown dialog formats fail closed.
  */
 export function createBitrix24Workflow(client: Bitrix24RestClient, logger: FastifyBaseLogger): WorkflowService {
   const allowedUserIds = new Set(
