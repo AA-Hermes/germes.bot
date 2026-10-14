@@ -136,6 +136,7 @@ export class OpenAIProvider implements LLMProvider {
       let outputUsageComplete = true;
       let toolCallsUsed = 0;
       for (let turn = 0; turn < 4; turn++) {
+      if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
       const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
@@ -179,12 +180,17 @@ export class OpenAIProvider implements LLMProvider {
         toolCallsUsed += calls.length;
         const outputs = [];
         for (const call of calls) {
+          if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
           if (!call.call_id || !call.name || !call.arguments) throw new Error('Invalid function call');
           let input: unknown;
           try { input = JSON.parse(call.arguments); } catch { input = null; }
           let output: unknown;
           try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: inputChannel, conversationId: inputConversationId, userId: inputUserId })).output; }
-          catch { output = { error: 'Tool execution failed' }; }
+          catch { 
+            if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
+            output = { error: 'Tool execution failed' };
+          }
+          if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
           outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) });
         }
         requestBody.input = [...(requestBody.input as unknown[]), ...(payload.output ?? []), ...outputs];
