@@ -101,6 +101,7 @@ export class OpenAIProvider implements LLMProvider {
   async generateReply(input: LLMGenerateInput): Promise<LLMGenerateResult> {
     const inputConversationId = input.conversationId;
     const inputUserId = input.userId;
+    const inputChannel = input.channel ?? 'unknown';
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -179,7 +180,7 @@ export class OpenAIProvider implements LLMProvider {
           let input: unknown;
           try { input = JSON.parse(call.arguments); } catch { input = null; }
           let output: unknown;
-          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: input.channel ?? 'unknown', conversationId: inputConversationId, userId: inputUserId })).output; }
+          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: inputChannel, conversationId: inputConversationId, userId: inputUserId })).output; }
           catch { output = { error: 'Tool execution failed' }; }
           outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) });
         }
