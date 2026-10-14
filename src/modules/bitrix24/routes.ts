@@ -32,7 +32,7 @@ export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
     ? new PostgresEventQueue(config.databaseUrl)
     : null;
   const queuedEventProcessor = eventQueue
-    ? new QueuedEventProcessor(eventQueue, workflowService, botService, app.log)
+    ? new QueuedEventProcessor(eventQueue, workflowService, botService, app.log, storage)
     : null;
 
   const scheduleBackground = eventQueue
