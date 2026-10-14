@@ -93,4 +93,34 @@ describe('Bitrix24 OAuth REST client', () => {
     const retryBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
     expect(retryBody.auth).toBe('fresh-access');
   });
+  it('rejects a CRM request for an event from another portal before HTTP', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+
+    await expect(
+      client.call('crm.item.list', { entityTypeId: 1 }, 'previous.bitrix24.com'),
+    ).rejects.toThrow('Bitrix24 portal does not match event origin');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('permits a CRM request when the event portal matches the installation', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ result: { items: [] } }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+
+    await expect(
+      client.call('crm.item.list', { entityTypeId: 1 }, 'example.bitrix24.com'),
+    ).resolves.toEqual({ items: [] });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
 });
