@@ -321,4 +321,22 @@ describe('OpenAIProvider', () => {
     );
   });
 
+
+  it('does not advertise CRM tools when request authorization is denied', async () => {
+    const execute = vi.fn();
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute,
+    } as unknown as ToolExecutor;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed', output_text: 'No tools available',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor, () => false);
+    await provider.generateReply({ message: 'Search CRM', channel: 'bitrix24', conversationId: 'chat-2', userId: 'other' });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.tools).toBeUndefined();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
 });
