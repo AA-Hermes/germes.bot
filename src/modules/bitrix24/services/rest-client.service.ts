@@ -27,7 +27,7 @@ export class Bitrix24RestClient {
     private readonly timeoutMs = 10_000,
   ) {}
 
-  async prepareCall(expectedPortalDomain?: string): Promise<{ clientEndpoint: string; accessToken: string }> {
+  async prepareCall(expectedPortalDomain?: string): Promise<{ clientEndpoint: string; accessToken: string; expectedPortalDomain?: string }> {
     const tokens = await this.storage.getTokens();
     const installation = await this.storage.getBitrix24Installation();
 
@@ -42,14 +42,21 @@ export class Bitrix24RestClient {
     return {
       clientEndpoint: installation.clientEndpoint,
       accessToken: tokens.accessToken,
+      ...(expectedPortalDomain ? { expectedPortalDomain } : {}),
     };
   }
 
   async callPrepared<T>(
-    prepared: { clientEndpoint: string; accessToken: string },
+    prepared: { clientEndpoint: string; accessToken: string; expectedPortalDomain?: string },
     method: string,
     params: Record<string, unknown>,
   ): Promise<T> {
+    if (prepared.expectedPortalDomain) {
+      const installation = await this.storage.getBitrix24Installation();
+      if (installation?.domain !== prepared.expectedPortalDomain || installation.clientEndpoint !== prepared.clientEndpoint) {
+        throw new Bitrix24RestError('Bitrix24 portal does not match event origin');
+      }
+    }
     try {
       return await this.callWithToken<T>(
         prepared.clientEndpoint,
@@ -62,7 +69,21 @@ export class Bitrix24RestClient {
         throw error;
       }
 
+      // Token refresh can race with a new portal installation. Never reuse
+      // replacement-portal credentials for a prepared call from an old portal.
+      if (prepared.expectedPortalDomain) {
+        const installation = await this.storage.getBitrix24Installation();
+        if (installation?.domain !== prepared.expectedPortalDomain || installation.clientEndpoint !== prepared.clientEndpoint) {
+          throw new Bitrix24RestError('Bitrix24 portal does not match event origin');
+        }
+      }
       const refreshed = await this.oauth.refreshTokens();
+      if (prepared.expectedPortalDomain) {
+        const installation = await this.storage.getBitrix24Installation();
+        if (installation?.domain !== prepared.expectedPortalDomain || installation.clientEndpoint !== prepared.clientEndpoint) {
+          throw new Bitrix24RestError('Bitrix24 portal does not match event origin');
+        }
+      }
 
       return this.callWithToken<T>(
         prepared.clientEndpoint,
