@@ -76,4 +76,55 @@ describe('queue recovery after the webhook worker is skipped', () => {
     expect(await processor.processAvailable(10)).toBe(0);
     expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
   });
+  it('does not resend when a recovered event fails after outbound delivery begins', async () => {
+    const event: QueuedEvent = {
+      id: 102,
+      channel: 'bitrix24',
+      externalId: 'recovery-test-102',
+      conversationId: 'private-dialog',
+      userId: '42',
+      text: 'Recovery verification',
+      attempts: 1,
+    };
+    let status: 'pending' | 'processing' | 'failed' = 'pending';
+    let deliveryStatus: 'pending' | 'sending' | 'unknown' = 'pending';
+    const queue: EventQueue = {
+      enqueue: vi.fn(async () => true),
+      claim: vi.fn(async () => {
+        if (status !== 'pending') return [];
+        status = 'processing';
+        return [event];
+      }),
+      beginDelivery: vi.fn(async () => {
+        deliveryStatus = 'sending';
+        return true;
+      }),
+      markDelivered: vi.fn(),
+      failDelivery: vi.fn(async () => {
+        status = 'failed';
+        deliveryStatus = 'unknown';
+      }),
+      retry: vi.fn(),
+    };
+    const workflow = {
+      handleMessage: vi.fn(async () => ({ text: 'Recovered reply', provider: 'openai' })),
+    };
+    const bot = {
+      prepareMessage: vi.fn(async () => ({ preparedCall: {}, params: {} })),
+      sendPreparedMessage: vi.fn(async () => {
+        throw new Error('Bitrix24 response lost after send');
+      }),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as FastifyBaseLogger;
+    const processor = new QueuedEventProcessor(queue, workflow as never, bot as never, logger);
+
+    expect(await processor.processAvailable(10)).toBe(1);
+    expect(status).toBe('failed');
+    expect(deliveryStatus).toBe('unknown');
+    expect(queue.failDelivery).toHaveBeenCalledWith(102, 'Error');
+    expect(queue.retry).not.toHaveBeenCalled();
+    expect(await processor.processAvailable(10)).toBe(0);
+    expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
+  });
+
 });
