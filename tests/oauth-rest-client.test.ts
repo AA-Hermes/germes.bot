@@ -123,4 +123,41 @@ describe('Bitrix24 OAuth REST client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('blocks a prepared CRM call if the installation changed before dispatch', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+    const prepared = await client.prepareCall('example.bitrix24.com');
+    storage.installation = {
+      ...storage.installation!,
+      domain: 'replacement.bitrix24.com',
+      clientEndpoint: 'https://replacement.bitrix24.com/rest/',
+    };
+
+    await expect(client.callPrepared(prepared, 'crm.item.list', { entityTypeId: 2 }))
+      .rejects.toThrow('Bitrix24 portal does not match event origin');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not retry an expired-token request with credentials from a replacement portal', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn().mockImplementationOnce(async () => {
+      storage.installation = {
+        ...storage.installation!,
+        domain: 'replacement.bitrix24.com',
+        clientEndpoint: 'https://replacement.bitrix24.com/rest/',
+      };
+      return new Response(JSON.stringify({ error: 'expired_token' }), { status: 401 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+
+    await expect(client.call('crm.item.list', { entityTypeId: 2 }, 'example.bitrix24.com'))
+      .rejects.toThrow('Bitrix24 portal does not match event origin');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
 });
