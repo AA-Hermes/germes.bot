@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type {
   AuthTokens,
+  Bitrix24CredentialsSnapshot,
   Bitrix24Installation,
   IntegrationStorage,
 } from './integration-storage.js';
@@ -37,6 +38,24 @@ export class FileIntegrationStorage implements IntegrationStorage {
   private async writeState(state: State): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
     await writeFile(this.filePath, JSON.stringify(state, null, 2), { mode: 0o600 });
+  }
+
+  async getCredentialsSnapshot(): Promise<Bitrix24CredentialsSnapshot> {
+    const state = await this.readState();
+    return { tokens: state.tokens, installation: state.bitrix24Installation };
+  }
+
+  async saveCredentialsSnapshot(snapshot: Bitrix24CredentialsSnapshot): Promise<void> {
+    const state = await this.readState();
+    await this.writeState({ ...state, tokens: snapshot.tokens, bitrix24Installation: snapshot.installation });
+  }
+
+  async saveTokensIfUnchanged(tokens: AuthTokens, previous: Bitrix24CredentialsSnapshot): Promise<boolean> {
+    const state = await this.readState();
+    if (JSON.stringify(state.tokens) !== JSON.stringify(previous.tokens) ||
+        JSON.stringify(state.bitrix24Installation) !== JSON.stringify(previous.installation)) return false;
+    await this.writeState({ ...state, tokens });
+    return true;
   }
 
   async getBotId(): Promise<number | null> {
