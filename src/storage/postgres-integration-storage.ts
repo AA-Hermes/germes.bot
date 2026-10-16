@@ -93,7 +93,7 @@ export class PostgresIntegrationStorage implements IntegrationStorage {
         AND installation IS NOT DISTINCT FROM ${oldInstallation}::jsonb
       RETURNING integration_key
     `;
-    return rows.length > 0;
+    return (rows as unknown as Array<{ integration_key: string }>).length > 0;
   }
 
   async getBotId(): Promise<number | null> {
