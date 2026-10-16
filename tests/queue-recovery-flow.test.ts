@@ -127,4 +127,64 @@ describe('queue recovery after the webhook worker is skipped', () => {
     expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a pre-delivery failure without sending and completes on a later recovery run', async () => {
+    const event: QueuedEvent = {
+      id: 103,
+      channel: 'bitrix24',
+      externalId: 'recovery-test-103',
+      conversationId: 'private-dialog',
+      userId: '42',
+      text: 'Recovery verification',
+      attempts: 1,
+    };
+    let status: 'pending' | 'processing' | 'completed' = 'pending';
+    let deliveryStatus: 'pending' | 'sending' | 'sent' = 'pending';
+    let attempts = 0;
+    const queue: EventQueue = {
+      enqueue: vi.fn(async () => true),
+      claim: vi.fn(async () => {
+        if (status !== 'pending') return [];
+        status = 'processing';
+        attempts += 1;
+        return [{ ...event, attempts }];
+      }),
+      beginDelivery: vi.fn(async () => {
+        deliveryStatus = 'sending';
+        return true;
+      }),
+      markDelivered: vi.fn(async () => {
+        status = 'completed';
+        deliveryStatus = 'sent';
+      }),
+      failDelivery: vi.fn(),
+      retry: vi.fn(async () => {
+        status = 'pending';
+      }),
+    };
+    const workflow = {
+      handleMessage: vi.fn()
+        .mockRejectedValueOnce(new Error('Temporary provider outage'))
+        .mockResolvedValueOnce({ text: 'Recovered reply', provider: 'openai' }),
+    };
+    const bot = {
+      prepareMessage: vi.fn(async () => ({ preparedCall: {}, params: {} })),
+      sendPreparedMessage: vi.fn(async () => ({ id: 99003 })),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as FastifyBaseLogger;
+    const processor = new QueuedEventProcessor(queue, workflow as never, bot as never, logger);
+
+    expect(await processor.processAvailable(1)).toBe(1);
+    expect(status).toBe('pending');
+    expect(deliveryStatus).toBe('pending');
+    expect(queue.retry).toHaveBeenCalledWith(103, 1, 'Error');
+    expect(bot.sendPreparedMessage).not.toHaveBeenCalled();
+
+    expect(await processor.processAvailable(1)).toBe(1);
+    expect(status).toBe('completed');
+    expect(deliveryStatus).toBe('sent');
+    expect(queue.markDelivered).toHaveBeenCalledWith(103, 99003);
+    expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
+    expect(queue.failDelivery).not.toHaveBeenCalled();
+  });
+
 });
