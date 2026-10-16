@@ -161,13 +161,16 @@ describe('queue recovery after the webhook worker is skipped', () => {
         status = 'pending';
       }),
     };
+    // WorkflowService handles provider errors by returning a fallback response.
+    // A transient failure in Bitrix24 request preparation can actually reject
+    // before beginDelivery(), making this event safe to retry.
     const workflow = {
-      handleMessage: vi.fn()
-        .mockRejectedValueOnce(new Error('Temporary provider outage'))
-        .mockResolvedValueOnce({ text: 'Recovered reply', provider: 'openai' }),
+      handleMessage: vi.fn(async () => ({ text: 'Recovered reply', provider: 'openai' })),
     };
     const bot = {
-      prepareMessage: vi.fn(async () => ({ preparedCall: {}, params: {} })),
+      prepareMessage: vi.fn()
+        .mockRejectedValueOnce(new Error('Temporary Bitrix24 preparation failure'))
+        .mockResolvedValueOnce({ preparedCall: {}, params: {} }),
       sendPreparedMessage: vi.fn(async () => ({ id: 99003 })),
     };
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as FastifyBaseLogger;
@@ -177,12 +180,15 @@ describe('queue recovery after the webhook worker is skipped', () => {
     expect(status).toBe('pending');
     expect(deliveryStatus).toBe('pending');
     expect(queue.retry).toHaveBeenCalledWith(103, 1, 'Error');
+    expect(queue.beginDelivery).not.toHaveBeenCalled();
     expect(bot.sendPreparedMessage).not.toHaveBeenCalled();
 
     expect(await processor.processAvailable(1)).toBe(1);
     expect(status).toBe('completed');
     expect(deliveryStatus).toBe('sent');
     expect(queue.markDelivered).toHaveBeenCalledWith(103, 99003);
+    expect(bot.prepareMessage).toHaveBeenCalledTimes(2);
+    expect(workflow.handleMessage).toHaveBeenCalledTimes(2);
     expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
     expect(queue.failDelivery).not.toHaveBeenCalled();
   });
