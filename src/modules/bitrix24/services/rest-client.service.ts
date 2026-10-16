@@ -28,8 +28,7 @@ export class Bitrix24RestClient {
   ) {}
 
   async prepareCall(expectedPortalDomain?: string): Promise<{ clientEndpoint: string; accessToken: string; expectedPortalDomain?: string }> {
-    const tokens = await this.storage.getTokens();
-    const installation = await this.storage.getBitrix24Installation();
+    const { tokens, installation } = await this.storage.getCredentialsSnapshot();
 
     if (!tokens?.accessToken || !installation?.clientEndpoint) {
       throw new Bitrix24RestError('Bitrix24 application is not installed');
