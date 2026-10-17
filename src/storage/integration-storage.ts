@@ -14,7 +14,15 @@ export interface Bitrix24Installation {
   applicationToken: string;
 }
 
+export interface Bitrix24CredentialsSnapshot {
+  tokens: AuthTokens | null;
+  installation: Bitrix24Installation | null;
+}
+
 export interface IntegrationStorage {
+  getCredentialsSnapshot(): Promise<Bitrix24CredentialsSnapshot>;
+  saveCredentialsSnapshot(snapshot: Bitrix24CredentialsSnapshot): Promise<void>;
+  saveTokensIfUnchanged(tokens: AuthTokens, previous: Bitrix24CredentialsSnapshot): Promise<boolean>;
   getBotId(): Promise<number | null>;
   setBotId(id: number | null): Promise<void>;
   getTokens(): Promise<AuthTokens | null>;

@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import type {
   AuthTokens,
+  Bitrix24CredentialsSnapshot,
   Bitrix24Installation,
   IntegrationStorage,
 } from './integration-storage.js';
@@ -61,6 +62,38 @@ export class PostgresIntegrationStorage implements IntegrationStorage {
       tokens: row?.tokens ?? null,
       installation: row?.installation ?? null,
     };
+  }
+
+  async getCredentialsSnapshot(): Promise<Bitrix24CredentialsSnapshot> {
+    const state = await this.getState();
+    return { tokens: state.tokens, installation: state.installation };
+  }
+
+  async saveCredentialsSnapshot(snapshot: Bitrix24CredentialsSnapshot): Promise<void> {
+    await this.ensureSchema();
+    const tokens = snapshot.tokens ? JSON.stringify(snapshot.tokens) : null;
+    const installation = snapshot.installation ? JSON.stringify(snapshot.installation) : null;
+    await this.sql`
+      INSERT INTO integration_state (integration_key, tokens, installation, updated_at)
+      VALUES (${STATE_KEY}, ${tokens}::jsonb, ${installation}::jsonb, now())
+      ON CONFLICT (integration_key)
+      DO UPDATE SET tokens = EXCLUDED.tokens, installation = EXCLUDED.installation, updated_at = now()
+    `;
+  }
+
+  async saveTokensIfUnchanged(tokens: AuthTokens, previous: Bitrix24CredentialsSnapshot): Promise<boolean> {
+    await this.ensureSchema();
+    const value = JSON.stringify(tokens);
+    const oldTokens = previous.tokens ? JSON.stringify(previous.tokens) : null;
+    const oldInstallation = previous.installation ? JSON.stringify(previous.installation) : null;
+    const rows = await this.sql`
+      UPDATE integration_state SET tokens = ${value}::jsonb, updated_at = now()
+      WHERE integration_key = ${STATE_KEY}
+        AND tokens IS NOT DISTINCT FROM ${oldTokens}::jsonb
+        AND installation IS NOT DISTINCT FROM ${oldInstallation}::jsonb
+      RETURNING integration_key
+    `;
+    return (rows as unknown as Array<{ integration_key: string }>).length > 0;
   }
 
   async getBotId(): Promise<number | null> {

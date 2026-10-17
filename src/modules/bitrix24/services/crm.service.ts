@@ -35,45 +35,45 @@ function normalizeEntity(value: Record<string, unknown>): CrmEntitySummary | nul
 export class Bitrix24CrmService {
   constructor(private readonly client: Bitrix24RestClient) {}
 
-  async searchDeals(query: string, limit: number): Promise<CrmEntitySummary[]> {
+  async searchDeals(query: string, limit: number, portalDomain?: string): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 2,
       filter: { '%title': query },
       select: ['id', 'title', 'stageId', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
-    }, limit);
+    }, limit, portalDomain);
   }
 
-  async searchContacts(query: string, limit: number): Promise<CrmEntitySummary[]> {
+  async searchContacts(query: string, limit: number, portalDomain?: string): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 3,
       filter: { logic: 'OR', '%name': query, '%lastName': query },
       select: ['id', 'name', 'lastName', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
-    }, limit);
+    }, limit, portalDomain);
   }
 
-  async searchLeads(query: string, limit: number): Promise<CrmEntitySummary[]> {
+  async searchLeads(query: string, limit: number, portalDomain?: string): Promise<CrmEntitySummary[]> {
     return this.list('crm.item.list', {
       entityTypeId: 1,
       filter: { '%title': query },
       select: ['id', 'title', 'stageId', 'companyId'],
       order: { updatedTime: 'DESC' },
       start: 0,
-    }, limit);
+    }, limit, portalDomain);
   }
 
   private async list(
     method: string,
     params: Record<string, unknown>,
     limit: number,
+    portalDomain?: string,
   ): Promise<CrmEntitySummary[]> {
-    const result = await this.client.call<BitrixListResult<Record<string, unknown>>>(
-      method,
-      params,
-    );
+    const result = portalDomain
+      ? await this.client.call<BitrixListResult<Record<string, unknown>>>(method, params, portalDomain)
+      : await this.client.call<BitrixListResult<Record<string, unknown>>>(method, params);
 
     return result.items
       .map(normalizeEntity)

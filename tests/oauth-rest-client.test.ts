@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyBaseLogger } from 'fastify';
 import type {
   AuthTokens,
+  Bitrix24CredentialsSnapshot,
   Bitrix24Installation,
   IntegrationStorage,
 } from '../src/storage/integration-storage.js';
@@ -24,6 +25,19 @@ class MemoryStorage implements IntegrationStorage {
     applicationToken: 'app-token',
   };
 
+  async getCredentialsSnapshot(): Promise<Bitrix24CredentialsSnapshot> {
+    return { tokens: this.tokens, installation: this.installation };
+  }
+  async saveCredentialsSnapshot(snapshot: Bitrix24CredentialsSnapshot) {
+    this.tokens = snapshot.tokens;
+    this.installation = snapshot.installation;
+  }
+  async saveTokensIfUnchanged(tokens: AuthTokens, previous: Bitrix24CredentialsSnapshot) {
+    if (JSON.stringify(this.tokens) !== JSON.stringify(previous.tokens) ||
+        JSON.stringify(this.installation) !== JSON.stringify(previous.installation)) return false;
+    this.tokens = tokens;
+    return true;
+  }
   async getBotId() { return this.botId; }
   async setBotId(id: number | null) { this.botId = id; }
   async getTokens() { return this.tokens; }
@@ -93,4 +107,117 @@ describe('Bitrix24 OAuth REST client', () => {
     const retryBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
     expect(retryBody.auth).toBe('fresh-access');
   });
+  it('rejects a CRM request for an event from another portal before HTTP', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+
+    await expect(
+      client.call('crm.item.list', { entityTypeId: 1 }, 'previous.bitrix24.com'),
+    ).rejects.toThrow('Bitrix24 portal does not match event origin');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('permits a CRM request when the event portal matches the installation', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ result: { items: [] } }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+
+    await expect(
+      client.call('crm.item.list', { entityTypeId: 1 }, 'example.bitrix24.com'),
+    ).resolves.toEqual({ items: [] });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a prepared CRM call if the installation changed before dispatch', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+    const prepared = await client.prepareCall('example.bitrix24.com');
+    storage.installation = {
+      ...storage.installation!,
+      domain: 'replacement.bitrix24.com',
+      clientEndpoint: 'https://replacement.bitrix24.com/rest/',
+    };
+
+    await expect(client.callPrepared(prepared, 'crm.item.list', { entityTypeId: 2 }))
+      .rejects.toThrow('Bitrix24 portal does not match event origin');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not retry an expired-token request with credentials from a replacement portal', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn().mockImplementationOnce(async () => {
+      storage.installation = {
+        ...storage.installation!,
+        domain: 'replacement.bitrix24.com',
+        clientEndpoint: 'https://replacement.bitrix24.com/rest/',
+      };
+      return new Response(JSON.stringify({ error: 'expired_token' }), { status: 401 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+
+    await expect(client.call('crm.item.list', { entityTypeId: 2 }, 'example.bitrix24.com'))
+      .rejects.toThrow('Bitrix24 portal does not match event origin');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not combine a replacement token with the old installation endpoint', async () => {
+    const storage = new MemoryStorage();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+    const client = new Bitrix24RestClient(storage, oauth, logger);
+    await storage.saveCredentialsSnapshot({
+      tokens: { accessToken: 'replacement-token', refreshToken: 'replacement-refresh' },
+      installation: {
+        ...storage.installation!,
+        domain: 'replacement.bitrix24.com',
+        clientEndpoint: 'https://replacement.bitrix24.com/rest/',
+      },
+    });
+
+    await expect(client.call('crm.item.list', { entityTypeId: 2 }, 'example.bitrix24.com'))
+      .rejects.toThrow('Bitrix24 portal does not match event origin');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite replacement credentials when refresh completes late', async () => {
+    const storage = new MemoryStorage();
+    const replacement = {
+      tokens: { accessToken: 'replacement-access', refreshToken: 'replacement-refresh' },
+      installation: {
+        ...storage.installation!,
+        domain: 'replacement.bitrix24.com',
+        clientEndpoint: 'https://replacement.bitrix24.com/rest/',
+      },
+    };
+    const fetchMock = vi.fn().mockImplementationOnce(async () => {
+      await storage.saveCredentialsSnapshot(replacement);
+      return new Response(JSON.stringify({
+        access_token: 'stale-access',
+        refresh_token: 'stale-refresh',
+        expires_in: 3600,
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const oauth = new Bitrix24OAuthService(storage, 'client-id', 'client-secret', logger);
+
+    await expect(oauth.refreshTokens()).rejects.toThrow('Bitrix24 credentials changed during OAuth refresh');
+    expect(await storage.getCredentialsSnapshot()).toEqual(replacement);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
 });

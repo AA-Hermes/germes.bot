@@ -124,6 +124,8 @@ export class BotController {
     if (this.eventQueue && this.queuedEventProcessor && this.scheduleBackground) {
       const queued = await this.eventQueue.enqueue({
         channel: 'bitrix24',
+        chatType: event.chatType,
+        portalDomain: event.domain ?? undefined,
         externalId: String(event.messageId),
         conversationId: event.dialogId,
         userId: String(event.authorId),
@@ -155,12 +157,15 @@ export class BotController {
 
     const workflow = await this.workflowService.handleMessage({
       channel: 'bitrix24',
+      chatType: event.chatType,
+      portalDomain: event.domain ?? undefined,
       conversationId: event.dialogId,
       userId: String(event.authorId),
       text: event.text,
     });
 
-    await this.botService.sendMessage(event.dialogId, workflow.text);
+    const prepared = await this.botService.prepareMessage(event.dialogId, workflow.text, event.domain ?? undefined);
+    await this.botService.sendPreparedMessage(prepared);
 
     return reply.send({
       status: 'ok',

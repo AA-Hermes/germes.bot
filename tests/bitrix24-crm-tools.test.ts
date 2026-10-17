@@ -5,7 +5,7 @@ import { createBitrix24CrmReadTools } from '../src/modules/bitrix24/tools/index.
 import type { Bitrix24RestClient } from '../src/modules/bitrix24/services/rest-client.service.js';
 import type { FastifyBaseLogger } from 'fastify';
 
-const context = { channel: 'bitrix24', conversationId: 'chat5', userId: '42' };
+const context = { channel: 'bitrix24', conversationId: 'chat5', userId: '42', portalDomain: 'original.bitrix24.com' };
 
 function logger(): FastifyBaseLogger {
   return { info: vi.fn(), error: vi.fn() } as unknown as FastifyBaseLogger;
@@ -46,6 +46,7 @@ describe('Bitrix24 CRM read tools', () => {
         entityTypeId: 2,
         filter: { '%title': 'ACME' },
       }),
+      'original.bitrix24.com',
     );
   });
 
@@ -59,6 +60,26 @@ describe('Bitrix24 CRM read tools', () => {
       entityTypeId: 3,
       filter: { logic: 'OR', '%name': 'Smith', '%lastName': 'Smith' },
     }));
+  });
+
+  it('forwards originating portal domain when searching leads', async () => {
+    const call = vi.fn(async () => ({ items: [{ id: 51, title: 'Lead' }] }));
+    const service = new Bitrix24CrmService({ call } as unknown as Bitrix24RestClient);
+    const executor = new ToolExecutor(
+      new ToolRegistry(createBitrix24CrmReadTools(service)),
+      logger(),
+    );
+
+    await executor.execute(
+      { name: 'crm_search_leads', input: { query: 'Lead', limit: 5 } },
+      context,
+    );
+
+    expect(call).toHaveBeenCalledWith(
+      'crm.item.list',
+      expect.objectContaining({ entityTypeId: 1, filter: { '%title': 'Lead' } }),
+      'original.bitrix24.com',
+    );
   });
 
   it('validates search input before any Bitrix24 request', async () => {

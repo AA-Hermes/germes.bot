@@ -48,7 +48,8 @@ export class Bitrix24OAuthService {
 
   private async doRefresh(): Promise<AuthTokens> {
     const credentials = this.requireCredentials();
-    const current = await this.storage.getTokens();
+    const previous = await this.storage.getCredentialsSnapshot();
+    const current = previous.tokens;
 
     if (!current?.refreshToken) {
       throw new Error('Bitrix24 refresh token is not available');
@@ -86,7 +87,9 @@ export class Bitrix24OAuthService {
       oauthServer: payload.domain || oauthServer,
     };
 
-    await this.storage.saveTokens(tokens);
+    if (!(await this.storage.saveTokensIfUnchanged(tokens, previous))) {
+      throw new Error('Bitrix24 credentials changed during OAuth refresh');
+    }
 
     this.logger.info({ event: 'B24_OAUTH_REFRESHED' });
 

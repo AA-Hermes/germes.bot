@@ -91,7 +91,7 @@ Write tools are intentionally blocked until an explicit authorization/confirmati
 
 Integration-specific tools belong in their integration module and should delegate to application services rather than exposing arbitrary transport calls. In particular, do not expose a generic `bitrix_rest_call(method, params)` tool to the model. Bitrix24 CRM tools should be explicit allowlisted operations such as search/get actions.
 
-Concrete Bitrix24 read tools now exist in `src/modules/bitrix24/tools/`: `crm_search_deals`, `crm_search_contacts`, and `crm_search_leads`. They delegate to `Bitrix24CrmService`, validate bounded inputs, and return allowlisted CRM fields. Contact search matches first name or surname. These tools are not yet wired to the LLM: native tool-call orchestration remains a separate step; `WorkflowService` still calls `LLMProvider` directly.
+Concrete Bitrix24 read tools now exist in `src/modules/bitrix24/tools/`: `crm_search_deals`, `crm_search_contacts`, and `crm_search_leads`. They delegate to `Bitrix24CrmService`, validate bounded inputs, and return allowlisted CRM fields. Contact search matches first name or surname. These tools are now available to the OpenAI Responses API through native function calling and `ToolExecutor`. Both the Bitrix24 webhook and queue recovery worker use `createBitrix24Workflow` to inject the same tool registry. Tool exposure is disabled by default and requires an explicitly allowlisted Bitrix24 user ID (`BITRIX24_CRM_TOOL_ALLOWED_USER_IDS`). `WorkflowService` continues to call `LLMProvider`, which handles bounded tool-call orchestration. Write tools remain disabled.
 
 Future conversation history should be introduced behind a dedicated `ConversationStorage` abstraction:
 

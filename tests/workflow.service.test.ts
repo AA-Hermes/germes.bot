@@ -32,6 +32,8 @@ describe('WorkflowService', () => {
     await expect(
       service.handleMessage({
         channel: 'bitrix24',
+        chatType: 'private',
+        portalDomain: 'example.bitrix24.com',
         conversationId: 'chat5',
         userId: '1',
         text: 'Привет',
@@ -44,6 +46,9 @@ describe('WorkflowService', () => {
 
     expect(provider.generateReply).toHaveBeenCalledWith({
       message: 'Привет',
+      channel: 'bitrix24',
+      chatType: 'private',
+      portalDomain: 'example.bitrix24.com',
       conversationId: 'chat5',
       userId: '1',
     });

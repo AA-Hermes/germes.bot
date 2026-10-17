@@ -1,7 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config/index.js';
-import { createLLMProvider } from '../core/llm/index.js';
-import { WorkflowService } from '../core/workflow/workflow.service.js';
 import { PostgresEventQueue } from '../queue/postgres-event-queue.js';
 import { getIntegrationStorage } from '../storage/index.js';
 import { BotService } from './bitrix24/services/bot.service.js';
@@ -9,6 +7,7 @@ import { Bitrix24OAuthService } from './bitrix24/services/oauth.service.js';
 import { QueuedEventProcessor } from './bitrix24/services/queued-event-processor.service.js';
 import { allowsWorkerRequest } from './bitrix24/services/queue-worker-guard.js';
 import { Bitrix24RestClient } from './bitrix24/services/rest-client.service.js';
+import { createBitrix24Workflow } from './bitrix24/services/crm-workflow.factory.js';
 
 export async function queueWorkerRoutes(app: FastifyInstance): Promise<void> {
   if (!config.databaseUrl) {
@@ -32,9 +31,9 @@ export async function queueWorkerRoutes(app: FastifyInstance): Promise<void> {
     app.log,
     `${config.appUrl}/api/bitrix24/webhook`,
   );
-  const workflowService = new WorkflowService(createLLMProvider(), app.log);
+  const workflowService = createBitrix24Workflow(client, app.log, storage);
   const queue = new PostgresEventQueue(config.databaseUrl);
-  const processor = new QueuedEventProcessor(queue, workflowService, botService, app.log);
+  const processor = new QueuedEventProcessor(queue, workflowService, botService, app.log, storage);
 
   app.get('/queue/process', async (request, reply) => {
     if (!config.cronSecret) {

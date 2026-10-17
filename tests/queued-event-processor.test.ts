@@ -65,7 +65,7 @@ describe('QueuedEventProcessor', () => {
 
     expect(queue.claim).toHaveBeenCalledWith(1);
     expect(queue.beginDelivery).toHaveBeenCalledWith(42);
-    expect(botService.prepareMessage).toHaveBeenCalledWith('1', 'OPENAI');
+    expect(botService.prepareMessage).toHaveBeenCalledWith('1', 'OPENAI', undefined);
     expect(botService.sendPreparedMessage).toHaveBeenCalledWith(preparedMessage);
     expect(queue.markDelivered).toHaveBeenCalledWith(42, 670326);
     expect(queue.failDelivery).not.toHaveBeenCalled();
@@ -165,4 +165,25 @@ describe('QueuedEventProcessor', () => {
     expect(queue.retry).not.toHaveBeenCalled();
     expect(queue.markDelivered).not.toHaveBeenCalled();
   });
+  it('never processes or delivers an event from a previous portal installation', async () => {
+    const queue = createQueue({ id: 45, externalId: '670327', attempts: 1 });
+    const claim = queue.claim as ReturnType<typeof vi.fn>;
+    claim.mockResolvedValueOnce([{
+      id: 45, channel: 'bitrix24', portalDomain: 'old.bitrix24.com',
+      chatType: 'private', externalId: '670327', conversationId: '1',
+      userId: '1', text: 'Find deals', attempts: 1,
+    }]);
+    const workflowService = { handleMessage: vi.fn() };
+    const botService = { prepareMessage: vi.fn(), sendPreparedMessage: vi.fn() };
+    const storage = { getBitrix24Installation: vi.fn().mockResolvedValue({ domain: 'new.bitrix24.com' }) };
+    const processor = new QueuedEventProcessor(
+      queue, workflowService as never, botService as never, createLogger(), storage as never,
+    );
+    await processor.processAvailable(1);
+    expect(workflowService.handleMessage).not.toHaveBeenCalled();
+    expect(botService.prepareMessage).not.toHaveBeenCalled();
+    expect(queue.beginDelivery).not.toHaveBeenCalled();
+    expect(queue.retry).toHaveBeenCalled();
+  });
+
 });

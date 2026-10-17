@@ -1,5 +1,7 @@
 export interface QueuedEventInput {
   channel: string;
+  chatType?: string;
+  portalDomain?: string;
   externalId: string;
   conversationId: string;
   userId?: string;

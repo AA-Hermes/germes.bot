@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LLMProviderError } from '../src/core/llm/llm-provider-error.js';
 import { OpenAIProvider } from '../src/core/llm/openai.provider.js';
+import type { ToolExecutor } from '../src/core/tools/tool-executor.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+
+
 });
 
 describe('OpenAIProvider', () => {
@@ -295,4 +298,85 @@ describe('OpenAIProvider', () => {
       }),
     ).rejects.toThrow('OpenAI Responses API error (HTTP 400, code invalid_request_error)');
   });
+  it('uses the workflow channel rather than model-authored tool arguments', async () => {
+    const execute = vi.fn().mockResolvedValue({ name: 'crm_search_deals', output: [] });
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute,
+    } as unknown as ToolExecutor;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed',
+        output: [{ type: 'function_call', name: 'crm_search_deals', call_id: 'call_1', arguments: '{"channel":"attacker"}' }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed', output_text: 'Done',
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor);
+    await provider.generateReply({ message: 'Find deals', channel: 'telegram', conversationId: 'chat-1', userId: 'u1' });
+    expect(execute).toHaveBeenCalledWith(
+      { name: 'crm_search_deals', input: { channel: 'attacker' } },
+      { channel: 'telegram', conversationId: 'chat-1', userId: 'u1' },
+    );
+  });
+
+
+  it('does not advertise CRM tools when request authorization is denied', async () => {
+    const execute = vi.fn();
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute,
+    } as unknown as ToolExecutor;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed', output_text: 'No tools available',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor, () => false);
+    await provider.generateReply({ message: 'Search CRM', channel: 'bitrix24', conversationId: 'chat-2', userId: 'other' });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.tools).toBeUndefined();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+
+  it('does not start another tool call after the response deadline', async () => {
+    const execute = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return { name: 'crm_search_deals', output: [] };
+    });
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute,
+    } as unknown as ToolExecutor;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed',
+      output: [
+        { type: 'function_call', name: 'crm_search_deals', call_id: 'one', arguments: '{}' },
+        { type: 'function_call', name: 'crm_search_deals', call_id: 'two', arguments: '{}' },
+      ],
+    }), { status: 200 })));
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 10, 1200, null, executor);
+    await expect(provider.generateReply({ message: 'Search', channel: 'bitrix24', conversationId: 'c' }))
+      .rejects.toMatchObject({ kind: 'timeout' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+
+  it('disables Responses API storage when CRM tools are available', async () => {
+    const executor = {
+      definitions: () => [{ name: 'crm_search_deals', description: 'Search deals', inputSchema: { type: 'object', properties: {} }, risk: 'read' }],
+      execute: vi.fn(),
+    } as unknown as ToolExecutor;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'completed', output_text: 'Done',
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new OpenAIProvider('key', 'gpt-4.1', 5000, 1200, null, executor);
+    await provider.generateReply({ message: 'Search CRM', channel: 'bitrix24', conversationId: 'c', userId: '1' });
+    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(request.store).toBe(false);
+    expect(request.tools).toHaveLength(1);
+  });
+
 });

@@ -1,4 +1,5 @@
 import { LLMProviderError, type LLMProviderErrorKind } from './llm-provider-error.js';
+import type { ToolExecutor } from '../tools/tool-executor.js';
 import type {
   LLMGenerateInput,
   LLMGenerateResult,
@@ -14,6 +15,9 @@ interface OpenAIResponseContent {
 interface OpenAIResponseOutput {
   type?: string;
   content?: OpenAIResponseContent[];
+  name?: string;
+  call_id?: string;
+  arguments?: string;
 }
 
 interface OpenAIResponsePayload {
@@ -91,15 +95,22 @@ export class OpenAIProvider implements LLMProvider {
     private readonly timeoutMs: number,
     private readonly maxOutputTokens: number,
     private readonly reasoningEffort: ReasoningEffort | null = null,
+    private readonly toolExecutor?: ToolExecutor,
+    private readonly canUseTools: (input: LLMGenerateInput) => boolean | Promise<boolean> = () => true,
   ) {}
 
   async generateReply(input: LLMGenerateInput): Promise<LLMGenerateResult> {
+    const inputConversationId = input.conversationId;
+    const inputUserId = input.userId;
+    const inputChannel = input.channel ?? 'unknown';
+    const inputPortalDomain = input.portalDomain;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const requestBody: Record<string, unknown> = {
         model: this.model,
+        store: false,
         instructions:
           'You are Hermes AI, a concise business assistant. Reply in the language used by the user unless they ask for another language.',
         input: [
@@ -117,6 +128,17 @@ export class OpenAIProvider implements LLMProvider {
         };
       }
 
+      const available = await this.canUseTools(input)
+        ? this.toolExecutor?.definitions().filter((tool) => tool.risk === 'read') ?? []
+        : [];
+      if (available.length) requestBody.tools = available.map((tool) => ({ type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }));
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      let inputUsageComplete = true;
+      let outputUsageComplete = true;
+      let toolCallsUsed = 0;
+      for (let turn = 0; turn < 4; turn++) {
+      if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
       const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
@@ -149,6 +171,33 @@ export class OpenAIProvider implements LLMProvider {
         throw new Error(`OpenAI Responses API returned incomplete output: ${reason}`);
       }
 
+      if (typeof payload.usage?.input_tokens === 'number') totalInputTokens += payload.usage.input_tokens;
+      else inputUsageComplete = false;
+      if (typeof payload.usage?.output_tokens === 'number') totalOutputTokens += payload.usage.output_tokens;
+      else outputUsageComplete = false;
+      const calls = (payload.output ?? []).filter((item) => item.type === 'function_call');
+      if (calls.length) {
+        if (!this.toolExecutor || !available.length || turn === 3) throw new Error('OpenAI tool execution unavailable');
+        if (toolCallsUsed + calls.length > 6) throw new Error('OpenAI tool call budget exceeded');
+        toolCallsUsed += calls.length;
+        const outputs = [];
+        for (const call of calls) {
+          if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
+          if (!call.call_id || !call.name || !call.arguments) throw new Error('Invalid function call');
+          let input: unknown;
+          try { input = JSON.parse(call.arguments); } catch { input = null; }
+          let output: unknown;
+          try { output = (await this.toolExecutor.execute({ name: call.name, input }, { channel: inputChannel, conversationId: inputConversationId, userId: inputUserId, portalDomain: inputPortalDomain })).output; }
+          catch { 
+            if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
+            output = { error: 'Tool execution failed' };
+          }
+          if (controller.signal.aborted) throw new DOMException('OpenAI response deadline exceeded', 'AbortError');
+          outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(output) });
+        }
+        requestBody.input = [...(requestBody.input as unknown[]), ...(payload.output ?? []), ...outputs];
+        continue;
+      }
       const text = this.extractText(payload);
 
       if (!text) {
@@ -159,9 +208,11 @@ export class OpenAIProvider implements LLMProvider {
         text,
         provider: 'openai',
         model: payload.model || this.model,
-        inputTokens: payload.usage?.input_tokens,
-        outputTokens: payload.usage?.output_tokens,
+        inputTokens: inputUsageComplete ? totalInputTokens : undefined,
+        outputTokens: outputUsageComplete ? totalOutputTokens : undefined,
       };
+      }
+      throw new Error('OpenAI tool iteration limit exceeded');
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new LLMProviderError(

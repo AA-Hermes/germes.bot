@@ -1,8 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { waitUntil } from '@vercel/functions';
 import { config } from '../../config/index.js';
-import { createLLMProvider } from '../../core/llm/index.js';
-import { WorkflowService } from '../../core/workflow/workflow.service.js';
 import { PostgresEventQueue } from '../../queue/postgres-event-queue.js';
 import { getIntegrationStorage } from '../../storage/index.js';
 import { BotController } from './controllers/bot.controller.js';
@@ -11,6 +9,7 @@ import { EventService } from './services/event.service.js';
 import { Bitrix24OAuthService } from './services/oauth.service.js';
 import { QueuedEventProcessor } from './services/queued-event-processor.service.js';
 import { Bitrix24RestClient } from './services/rest-client.service.js';
+import { createBitrix24Workflow } from './services/crm-workflow.factory.js';
 
 export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
   const storage = getIntegrationStorage();
@@ -27,13 +26,13 @@ export async function bitrix24Routes(app: FastifyInstance): Promise<void> {
     app.log,
     `${config.appUrl}/api/bitrix24/webhook`,
   );
-  const workflowService = new WorkflowService(createLLMProvider(), app.log);
+  const workflowService = createBitrix24Workflow(client, app.log, storage);
 
   const eventQueue = config.databaseUrl
     ? new PostgresEventQueue(config.databaseUrl)
     : null;
   const queuedEventProcessor = eventQueue
-    ? new QueuedEventProcessor(eventQueue, workflowService, botService, app.log)
+    ? new QueuedEventProcessor(eventQueue, workflowService, botService, app.log, storage)
     : null;
 
   const scheduleBackground = eventQueue

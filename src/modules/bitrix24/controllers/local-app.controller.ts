@@ -54,20 +54,21 @@ export class LocalAppController {
 
     const expiresIn = Number(auth.expires_in ?? 3600);
 
-    await this.storage.saveTokens({
-      accessToken: auth.access_token!,
-      refreshToken: auth.refresh_token!,
-      expiresAt: Date.now() + Math.max(expiresIn, 0) * 1000,
-      oauthServer: 'oauth.bitrix.info',
-    });
-
-    await this.storage.saveBitrix24Installation({
-      domain: auth.domain!,
-      memberId: auth.member_id!,
-      clientEndpoint: auth.client_endpoint!,
-      serverEndpoint: auth.server_endpoint!,
-      scope: auth.scope ?? '',
-      applicationToken: auth.application_token!,
+    await this.storage.saveCredentialsSnapshot({
+      tokens: {
+        accessToken: auth.access_token!,
+        refreshToken: auth.refresh_token!,
+        expiresAt: Date.now() + Math.max(expiresIn, 0) * 1000,
+        oauthServer: 'oauth.bitrix.info',
+      },
+      installation: {
+        domain: auth.domain!,
+        memberId: auth.member_id!,
+        clientEndpoint: auth.client_endpoint!,
+        serverEndpoint: auth.server_endpoint!,
+        scope: auth.scope ?? '',
+        applicationToken: auth.application_token!,
+      },
     });
 
     request.log.info({
