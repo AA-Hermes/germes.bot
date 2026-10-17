@@ -52,7 +52,7 @@ The worker processes at most ten eligible rows per request. A successful GitHub 
 
 ## 3. Verify delivery and final state
 
-Confirm the expected response appears in the test Bitrix24 dialog. Independently verify sanitized production application logs contain `WORKFLOW_MESSAGE_COMPLETED` for the test conversation with `provider: 'openai'` (and not `provider: 'echo'` or `fallback`); correlate the event/queue ID and time window without exposing message text, credentials, or CRM records. If provider identity cannot be confirmed, the E2E acceptance criterion is **not met** even when the queue row is `completed / sent`. Then run:
+Confirm the expected response appears in the test Bitrix24 dialog. Independently verify sanitized production application logs contain `QUEUED_EVENT_COMPLETED` for the **exact** test `queueId` and `externalId`, with `provider: 'openai'` (and not `provider: 'echo'` or `fallback`). The queue completion record includes the provider and model from the workflow result, so a different message in the same conversation cannot satisfy this check. Do not rely on a nearby `WORKFLOW_MESSAGE_COMPLETED` entry alone, since it has no queue ID. Do not expose message text, credentials, or CRM records. If provider identity cannot be confirmed, the E2E acceptance criterion is **not met** even when the queue row is `completed / sent`. Then run:
 
 ```sql
 SELECT id, status, delivery_status, attempts, outbound_message_id, last_error
