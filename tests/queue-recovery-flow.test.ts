@@ -73,6 +73,13 @@ describe('queue recovery after the webhook worker is skipped', () => {
     expect(row.attempts).toBe(1);
     expect(workflow.handleMessage).toHaveBeenCalledTimes(1);
     expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'QUEUED_EVENT_COMPLETED',
+      queueId: 101,
+      externalId: 'recovery-test-101',
+      provider: 'openai',
+      outboundMessageId: 99001,
+    }));
     expect(await processor.processAvailable(10)).toBe(0);
     expect(bot.sendPreparedMessage).toHaveBeenCalledTimes(1);
   });
