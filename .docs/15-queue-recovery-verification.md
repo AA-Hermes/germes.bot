@@ -15,7 +15,7 @@ The automated test `tests/queue-recovery-flow.test.ts` exercises the state trans
 - Verify the production deployment at `https://germesbot.vercel.app` uses the intended production Neon database and Bitrix24 test dialog. The GitHub Actions recovery workflow targets this URL, not a staging deployment.
 - `DATABASE_URL` must be configured on production Vercel; `CRON_SECRET` must match the GitHub Actions secret. Never print either value.
 - Confirm `OPENAI_API_KEY` is configured for the production deployment and that the active LLM provider is OpenAI, not the automatic `EchoLLMProvider` fallback. Check configuration without revealing the key. A successful Bitrix24 reply or queue status alone is **not** evidence that OpenAI ran.
-- Ensure no other workers are processing the chosen event during the test. Use a unique `external_id` with a recognizable `recovery-e2e-` prefix.
+- Use a unique `external_id` with a recognizable `recovery-e2e-` prefix. The production scheduler and webhook background workers may run concurrently; do not assume exclusive access or pause the production worker merely to make the test deterministic.
 - Run the test only when a controlled reply to that dialog is acceptable. Do not use a customer conversation.
 
 ## 1. Create one controlled pending event
@@ -34,7 +34,7 @@ RETURNING id, external_id, status, delivery_status, attempts, outbound_message_i
 
 **Important:** Do not use this insert against a branch/schema that requires additional security metadata such as `portal_domain` or `chat_type`. In that version, provide verified values for those columns, including the real originating portal domain and `private` chat type. Missing metadata must fail closed.
 
-Immediately verify the record remains pending. Scheduled recovery runs every five minutes, so the observation window is short. For a deterministic pre-run observation, temporarily pause the scheduled recovery workflow and other consumers in a controlled test environment, then restore them afterward.
+Immediately query the record. Scheduled recovery runs every five minutes, so it may already be claimed or completed before this observation. **Do not disable the production recovery workflow or other consumers for this test.** If the row is no longer pending, record the timing and relevant worker logs; do not reset its state or insert a duplicate message to force a screenshot. To prove the initial pending state deterministically, perform that part in a separate isolated environment; the existing production-only GitHub workflow cannot be used to process staging rows.
 
 ```sql
 SELECT id, status, delivery_status, attempts, outbound_message_id
@@ -42,13 +42,13 @@ FROM incoming_event_queue
 WHERE channel = 'bitrix24' AND external_id = 'recovery-e2e-REPLACE-UNIQUE-ID';
 ```
 
-Expected: `pending / pending`, `attempts = 0`, `outbound_message_id IS NULL`.
+Expected if observed before the scheduler: `pending / pending`, `attempts = 0`, `outbound_message_id IS NULL`. A concurrent worker may advance the row; use timestamps and logs to establish the actual sequence.
 
 ## 2. Run recovery
 
 In GitHub Actions, open **Queue Recovery** (`.github/workflows/queue-worker.yml`) and choose **Run workflow**, or wait for its scheduled run. Confirm the workflow succeeded and the protected **production** `GET https://germesbot.vercel.app/api/queue/process` returned a successful response. A staging queue cannot be verified by this workflow. Inspect only sanitized status codes and queue event metadata; do not paste authorization headers or credentials into issues.
 
-The worker processes at most ten eligible rows per request. If the event is not claimed on the first run, check backlog and retry eligibility before drawing conclusions.
+The worker processes at most ten eligible rows per request. A successful GitHub Actions run alone does not prove the test row was claimed: correlate the specific `external_id` and queue row ID with the production worker logs and final database state. If the event is not claimed on the first run, check backlog and retry eligibility before drawing conclusions.
 
 ## 3. Verify delivery and final state
 
@@ -66,6 +66,6 @@ If the row is `failed / unknown`, **do not automatically resend**: outbound deli
 
 ## 4. Cleanup
 
-Re-enable any paused worker/schedule. Remove only the specifically identified test row if retention policy allows; do not run broad deletion queries. No test-only endpoint, bypass flag, or production secret should remain.
+Do not pause or reconfigure production schedules. Remove only the specifically identified test row if retention policy allows; do not run broad deletion queries. No test-only endpoint, bypass flag, or production secret should remain.
 
 **Completion criterion:** close issue #14 only after real **production** GitHub Actions → Vercel → Neon → **verified OpenAI provider** → Bitrix24 delivery and final persisted state have been independently confirmed.
