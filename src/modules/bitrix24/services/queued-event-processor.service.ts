@@ -64,6 +64,8 @@ export class QueuedEventProcessor {
           queueId: event.id,
           externalId: event.externalId,
           attempts: event.attempts,
+          provider: workflow.provider,
+          model: workflow.model,
           outboundMessageId: sent.id,
         });
       } catch (error) {
