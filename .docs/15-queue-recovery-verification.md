@@ -20,19 +20,19 @@ The automated test `tests/queue-recovery-flow.test.ts` exercises the state trans
 
 ## 1. Create one controlled pending event
 
-Use the Neon SQL editor or a restricted database session. Substitute the **real** test dialog/user IDs and a unique external ID. This simulates an accepted webhook whose `waitUntil()` processor did not run, without adding a test-only production HTTP endpoint.
+Use the Neon SQL editor or a restricted database session. Substitute the **real** test dialog/user IDs, originating portal domain, and a unique external ID. Confirm the domain against the current `integration_state.installation` and the originating Bitrix24 event; do not guess it. This simulates an accepted webhook whose `waitUntil()` processor did not run, without adding a test-only production HTTP endpoint.
 
 ```sql
 INSERT INTO incoming_event_queue
-  (channel, external_id, conversation_id, user_id, text, status, delivery_status, available_at)
+  (channel, chat_type, portal_domain, external_id, conversation_id, user_id, text, status, delivery_status, available_at)
 VALUES
-  ('bitrix24', 'recovery-e2e-REPLACE-UNIQUE-ID',
-   'REPLACE-REAL-TEST-DIALOG-ID', 'REPLACE-REAL-TEST-USER-ID',
+  ('bitrix24', 'private', 'REPLACE-VERIFIED-PORTAL-DOMAIN',
+   'recovery-e2e-REPLACE-UNIQUE-ID', 'REPLACE-REAL-TEST-DIALOG-ID', 'REPLACE-REAL-TEST-USER-ID',
    'Reply with: queue recovery verified', 'pending', 'pending', now())
 RETURNING id, external_id, status, delivery_status, attempts, outbound_message_id;
 ```
 
-**Important:** Do not use this insert against a branch/schema that requires additional security metadata such as `portal_domain` or `chat_type`. In that version, provide verified values for those columns, including the real originating portal domain and `private` chat type. Missing metadata must fail closed.
+**Important:** The current production worker requires `portal_domain` to match the active Bitrix24 installation. Use `chat_type = 'private'` only for a verified private test dialog; both values must reflect the originating event. Do not execute the example with placeholder values or missing metadata. A mismatched portal must fail closed.
 
 Immediately query the record. Scheduled recovery runs every five minutes, so it may already be claimed or completed before this observation. **Do not disable the production recovery workflow or other consumers for this test.** If the row is no longer pending, record the timing and relevant worker logs; do not reset its state or insert a duplicate message to force a screenshot. To prove the initial pending state deterministically, perform that part in a separate isolated environment; the existing production-only GitHub workflow cannot be used to process staging rows.
 
@@ -52,7 +52,7 @@ The worker processes at most ten eligible rows per request. A successful GitHub 
 
 ## 3. Verify delivery and final state
 
-Confirm the expected response appears in the test Bitrix24 dialog. Independently verify sanitized production application logs contain `WORKFLOW_MESSAGE_COMPLETED` for the test conversation with `provider: 'openai'` (and not `provider: 'echo'` or `fallback`); correlate the event/queue ID and time window without exposing message text, credentials, or CRM records. If provider identity cannot be confirmed, the E2E acceptance criterion is **not met** even when the queue row is `completed / sent`. Then run:
+Confirm the expected response appears in the test Bitrix24 dialog. Independently verify sanitized production application logs contain `QUEUED_EVENT_COMPLETED` for the **exact** test `queueId` and `externalId`, with `provider: 'openai'` (and not `provider: 'echo'` or `fallback`). This log contains provider and model alongside the queue ID, so another message in the same conversation cannot satisfy this check. A nearby `WORKFLOW_MESSAGE_COMPLETED` log alone is insufficient. Do not expose message text, credentials, or CRM records. If provider identity cannot be confirmed, the E2E acceptance criterion is **not met** even when the queue row is `completed / sent`. Then run:
 
 ```sql
 SELECT id, status, delivery_status, attempts, outbound_message_id, last_error
