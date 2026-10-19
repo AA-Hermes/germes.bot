@@ -18,6 +18,21 @@ The automated test `tests/queue-recovery-flow.test.ts` exercises the state trans
 - Use a unique `external_id` with a recognizable `recovery-e2e-` prefix. The production scheduler and webhook background workers may run concurrently; do not assume exclusive access or pause the production worker merely to make the test deterministic.
 - Run the test only when a controlled reply to that dialog is acceptable. Do not use a customer conversation.
 
+## Safe preflight: confirm active portal and bot registration
+
+Before inserting a test event, run this **read-only** query against the production Neon database. It returns only the installation domain and whether the bot ID is present; it does **not** expose access tokens, refresh tokens, or the application token.
+
+```sql
+SELECT
+  installation->>'domain' AS portal_domain,
+  installation->>'memberId' AS portal_member_id,
+  (bot_id IS NOT NULL) AS bot_registered
+FROM integration_state
+WHERE integration_key = 'bitrix24';
+```
+
+Require exactly one row, a non-empty portal domain matching the **verified originating test event**, and `bot_registered = true`. Confirm the dialog is private and the test user is authorized. If any check fails, **stop** rather than inserting a queue row. Do not publish the member ID or other portal metadata in a public issue; record only that the checks passed.
+
 ## 1. Create one controlled pending event
 
 Use the Neon SQL editor or a restricted database session. Substitute the **real** test dialog/user IDs, originating portal domain, and a unique external ID. Confirm the domain against the current `integration_state.installation` and the originating Bitrix24 event; do not guess it. This simulates an accepted webhook whose `waitUntil()` processor did not run, without adding a test-only production HTTP endpoint.
