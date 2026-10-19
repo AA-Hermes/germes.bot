@@ -20,18 +20,28 @@ The automated test `tests/queue-recovery-flow.test.ts` exercises the state trans
 
 ## Safe preflight: confirm active portal and bot registration
 
-Before inserting a test event, run this **read-only** query against the production Neon database. It returns only the installation domain and whether the bot ID is present; it does **not** expose access tokens, refresh tokens, or the application token.
+Before inserting a test event, run this **read-only** query against the production Neon database. It returns the installation identity and whether a bot ID is stored; it does **not** expose access tokens, refresh tokens, or the application token.
 
 ```sql
 SELECT
   installation->>'domain' AS portal_domain,
   installation->>'memberId' AS portal_member_id,
-  (bot_id IS NOT NULL) AS bot_registered
+  (bot_id IS NOT NULL) AS bot_id_present
 FROM integration_state
 WHERE integration_key = 'bitrix24';
 ```
 
-Require exactly one row, a non-empty portal domain matching the **verified originating test event**, and `bot_registered = true`. Confirm the dialog is private and the test user is authorized. If any check fails, **stop** rather than inserting a queue row. Do not publish the member ID or other portal metadata in a public issue; record only that the checks passed.
+Require exactly one row and a non-empty portal domain matching the **verified originating test event**. `bot_id_present` is diagnostic only: installation/token replacement preserves the stored bot ID, so even `true` does not prove registration on the current portal.
+
+Before the insert, perform a live registration check against the same production deployment:
+
+```bash
+curl --fail --silent --show-error https://germesbot.vercel.app/api/bitrix24/bot/status
+```
+
+Require a successful response with `configured: true`, `installed: true`, `registered: true`, a non-null `botId`, and `domain` exactly matching both the database installation and the originating test event. This status handler calls `imbot.v2.Bot.list` using the current installation credentials, finds code `hermes_ai`, and refreshes the stored bot ID from that portal (or clears it when absent). It may also refresh OAuth tokens; unlike the SQL above, this is not a read-only storage operation. A stored ID alone, a cached response, or a status check against a different deployment is insufficient.
+
+If the live check fails, returns no matching bot, or reports a different domain, **stop** before inserting a queue row. Repair the installation/registration through the normal setup flow and repeat both checks. Repeat the preflight if installation credentials change before insertion. Confirm the dialog is private and the test user is authorized. Do not publish the status response, bot ID, member ID, or other portal metadata in a public issue; record only that the checks passed.
 
 ## 1. Create one controlled pending event
 
