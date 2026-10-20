@@ -7,6 +7,7 @@ import type { IntegrationStorage } from '../../../storage/integration-storage.js
 import { BotService } from '../services/bot.service.js';
 import { EventService } from '../services/event.service.js';
 import type { QueuedEventProcessor } from '../services/queued-event-processor.service.js';
+import { Bitrix24RestPlanRequiredError } from '../services/rest-client.service.js';
 
 interface TestBody {
   dialogId: string | number;
@@ -55,7 +56,7 @@ export class BotController {
     }
   };
 
-  status = async () => {
+  status = async (_request: FastifyRequest, reply: FastifyReply) => {
     const oauthConfigured = isBitrixOAuthConfigured();
     const installation = await this.storage.getBitrix24Installation();
     const tokens = await this.storage.getTokens();
@@ -64,7 +65,20 @@ export class BotController {
     let registered = false;
 
     if (oauthConfigured && installed) {
-      registered = await this.botService.isRegistered();
+      try {
+        registered = await this.botService.isRegistered();
+      } catch (error) {
+        if (!(error instanceof Bitrix24RestPlanRequiredError)) throw error;
+        return reply.code(503).send({
+          configured: oauthConfigured,
+          installed,
+          domain: installation?.domain ?? null,
+          registered: null,
+          botId: null,
+          name: 'Hermes AI',
+          error: { code: 'BITRIX24_REST_PLAN_REQUIRED', message: error.message },
+        });
+      }
     }
 
     return {
