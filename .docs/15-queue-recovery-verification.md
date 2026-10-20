@@ -18,21 +18,46 @@ The automated test `tests/queue-recovery-flow.test.ts` exercises the state trans
 - Use a unique `external_id` with a recognizable `recovery-e2e-` prefix. The production scheduler and webhook background workers may run concurrently; do not assume exclusive access or pause the production worker merely to make the test deterministic.
 - Run the test only when a controlled reply to that dialog is acceptable. Do not use a customer conversation.
 
+## Safe preflight: confirm active portal and bot registration
+
+Before inserting a test event, run this **read-only** query against the production Neon database. It returns the installation identity and whether a bot ID is stored; it does **not** expose access tokens, refresh tokens, or the application token.
+
+```sql
+SELECT
+  installation->>'domain' AS portal_domain,
+  installation->>'memberId' AS portal_member_id,
+  (bot_id IS NOT NULL) AS bot_id_present
+FROM integration_state
+WHERE integration_key = 'bitrix24';
+```
+
+Require exactly one row and a non-empty portal domain matching the **verified originating test event**. `bot_id_present` is diagnostic only: installation/token replacement preserves the stored bot ID, so even `true` does not prove registration on the current portal.
+
+Before the insert, perform a live registration check against the same production deployment:
+
+```bash
+curl --fail --silent --show-error https://germesbot.vercel.app/api/bitrix24/bot/status
+```
+
+Require a successful response with `configured: true`, `installed: true`, `registered: true`, a non-null `botId`, and `domain` exactly matching both the database installation and the originating test event. This status handler calls `imbot.v2.Bot.list` using the current installation credentials, finds code `hermes_ai`, and refreshes the stored bot ID from that portal (or clears it when absent). It may also refresh OAuth tokens; unlike the SQL above, this is not a read-only storage operation. A stored ID alone, a cached response, or a status check against a different deployment is insufficient.
+
+If the live check fails, returns no matching bot, or reports a different domain, **stop** before inserting a queue row. Repair the installation/registration through the normal setup flow and repeat both checks. Repeat the preflight if installation credentials change before insertion. Confirm the dialog is private and the test user is authorized. Do not publish the status response, bot ID, member ID, or other portal metadata in a public issue; record only that the checks passed.
+
 ## 1. Create one controlled pending event
 
-Use the Neon SQL editor or a restricted database session. Substitute the **real** test dialog/user IDs and a unique external ID. This simulates an accepted webhook whose `waitUntil()` processor did not run, without adding a test-only production HTTP endpoint.
+Use the Neon SQL editor or a restricted database session. Substitute the **real** test dialog/user IDs, originating portal domain, and a unique external ID. Confirm the domain against the current `integration_state.installation` and the originating Bitrix24 event; do not guess it. This simulates an accepted webhook whose `waitUntil()` processor did not run, without adding a test-only production HTTP endpoint.
 
 ```sql
 INSERT INTO incoming_event_queue
-  (channel, external_id, conversation_id, user_id, text, status, delivery_status, available_at)
+  (channel, chat_type, portal_domain, external_id, conversation_id, user_id, text, status, delivery_status, available_at)
 VALUES
-  ('bitrix24', 'recovery-e2e-REPLACE-UNIQUE-ID',
-   'REPLACE-REAL-TEST-DIALOG-ID', 'REPLACE-REAL-TEST-USER-ID',
+  ('bitrix24', 'private', 'REPLACE-VERIFIED-PORTAL-DOMAIN',
+   'recovery-e2e-REPLACE-UNIQUE-ID', 'REPLACE-REAL-TEST-DIALOG-ID', 'REPLACE-REAL-TEST-USER-ID',
    'Reply with: queue recovery verified', 'pending', 'pending', now())
 RETURNING id, external_id, status, delivery_status, attempts, outbound_message_id;
 ```
 
-**Important:** Do not use this insert against a branch/schema that requires additional security metadata such as `portal_domain` or `chat_type`. In that version, provide verified values for those columns, including the real originating portal domain and `private` chat type. Missing metadata must fail closed.
+**Important:** The current production worker requires `portal_domain` to match the active Bitrix24 installation. Use `chat_type = 'private'` only for a verified private test dialog; both values must reflect the originating event. Do not execute the example with placeholder values or missing metadata. A mismatched portal must fail closed.
 
 Immediately query the record. Scheduled recovery runs every five minutes, so it may already be claimed or completed before this observation. **Do not disable the production recovery workflow or other consumers for this test.** If the row is no longer pending, record the timing and relevant worker logs; do not reset its state or insert a duplicate message to force a screenshot. To prove the initial pending state deterministically, perform that part in a separate isolated environment; the existing production-only GitHub workflow cannot be used to process staging rows.
 
@@ -52,7 +77,7 @@ The worker processes at most ten eligible rows per request. A successful GitHub 
 
 ## 3. Verify delivery and final state
 
-Confirm the expected response appears in the test Bitrix24 dialog. Independently verify sanitized production application logs contain `WORKFLOW_MESSAGE_COMPLETED` for the test conversation with `provider: 'openai'` (and not `provider: 'echo'` or `fallback`); correlate the event/queue ID and time window without exposing message text, credentials, or CRM records. If provider identity cannot be confirmed, the E2E acceptance criterion is **not met** even when the queue row is `completed / sent`. Then run:
+Confirm the expected response appears in the test Bitrix24 dialog. Independently verify sanitized production application logs contain `QUEUED_EVENT_COMPLETED` for the **exact** test `queueId` and `externalId`, with `provider: 'openai'` (and not `provider: 'echo'` or `fallback`). This log contains provider and model alongside the queue ID, so another message in the same conversation cannot satisfy this check. A nearby `WORKFLOW_MESSAGE_COMPLETED` log alone is insufficient. Do not expose message text, credentials, or CRM records. If provider identity cannot be confirmed, the E2E acceptance criterion is **not met** even when the queue row is `completed / sent`. Then run:
 
 ```sql
 SELECT id, status, delivery_status, attempts, outbound_message_id, last_error
