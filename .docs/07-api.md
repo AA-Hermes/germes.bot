@@ -28,6 +28,13 @@ POST /api/bitrix24/bot/test
 POST /api/bitrix24/webhook
 ```
 
+If the live status check receives `ACCESS_DENIED` with the exact upstream description
+`REST is available only on commercial plans.`, it returns HTTP 503 and a safe
+`error.code = BITRIX24_REST_PLAN_REQUIRED` with instructions to check the portal's
+plan and REST access. `registered` is `null` (not verified), not `false`; the
+stored bot ID is preserved. This does not prove that a subscription expired:
+other permission and authentication errors retain their existing behavior.
+
 ## Queue worker
 
 ```text
