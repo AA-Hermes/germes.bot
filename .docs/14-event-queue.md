@@ -59,6 +59,12 @@ Current policy:
 - exhausted items move to `failed`.
 
 Only a safe error class name is stored in `last_error`; raw provider response bodies are not persisted.
+The confirmed commercial-plan REST restriction is classified as
+`Bitrix24RestPlanRequiredError` and logged with reason `BITRIX24_REST_PLAN_REQUIRED`.
+Other `ACCESS_DENIED` responses are not assumed to be subscription failures.
+Delivery states and retry policy are unchanged: a failure after delivery begins
+still requires manual inspection, even for this diagnostic. No error reply can
+be delivered through Bitrix24 while its REST access is unavailable.
 
 Before sending a reply to Bitrix24, the queue atomically changes `delivery_status` from `pending` to `sending`. After Bitrix24 returns a message ID, the same row is marked `completed` / `sent` and stores that outbound message ID. If the process fails after delivery has started, the row is not automatically resent because Bitrix24 Chatbots 2.0 does not expose an idempotency key for `imbot.v2.Chat.Message.send`. The row is instead marked `failed` / `unknown` for manual inspection. This favors avoiding duplicate user-visible replies over automatic retry of an ambiguous send.
 

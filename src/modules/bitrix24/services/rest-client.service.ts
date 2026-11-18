@@ -19,6 +19,17 @@ export class Bitrix24RestError extends Error {
   }
 }
 
+export class Bitrix24RestPlanRequiredError extends Bitrix24RestError {
+  constructor(status: number) {
+    super(
+      'Bitrix24 сообщает, что REST доступен только на коммерческих тарифах. Проверьте тариф и доступ к REST в вашем портале.',
+      'ACCESS_DENIED',
+      status,
+    );
+    this.name = 'Bitrix24RestPlanRequiredError';
+  }
+}
+
 export class Bitrix24RestClient {
   constructor(
     private readonly storage: IntegrationStorage,
@@ -119,12 +130,17 @@ export class Bitrix24RestClient {
       const payload = (await response.json()) as BitrixResponse<T>;
 
       if (!response.ok || payload.error) {
+        const planRequired = payload.error === 'ACCESS_DENIED' &&
+          payload.error_description?.trim() === 'REST is available only on commercial plans.';
         this.logger.error({
           event: 'BITRIX_API_REQUEST_ERROR',
           method,
           status: response.status,
           code: payload.error,
+          ...(planRequired ? { reason: 'BITRIX24_REST_PLAN_REQUIRED' } : {}),
         });
+
+        if (planRequired) throw new Bitrix24RestPlanRequiredError(response.status);
 
         throw new Bitrix24RestError(
           payload.error_description || 'Bitrix24 REST error',
